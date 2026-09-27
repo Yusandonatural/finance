@@ -1,0 +1,6 @@
+# ローカル開発用（cp .dev.vars.example .dev.vars）。本番では使わない。
+# DEV_MODE=1 で Cloudflare Access の検証を省略し、/dev/seed でデモデータを投入できる。
+DEV_MODE=1
+FREEE_CLIENT_ID=
+FREEE_CLIENT_SECRET=
+TOKEN_ENC_KEY=

@@ -1,0 +1,36 @@
+name = "finance"
+main = "src/index.tsx"
+compatibility_date = "2026-09-01"
+# workers.dev は無効化し、Cloudflare Access で保護されたカスタムドメインのみで公開する
+workers_dev = false
+routes = [{ pattern = "finance.yusando.com", custom_domain = true }]
+
+[assets]
+directory = "./public"
+
+[vars]
+FREEE_COMPANY_ID = "796362"
+APP_ORIGIN = "https://finance.yusando.com"
+# Cloudflare Access（Zero Trust）のチームドメインとアプリケーション AUD タグ。
+# 両方が入っていないと本番では全リクエストを 403 にする（安全側に倒す）。
+ACCESS_TEAM_DOMAIN = ""
+ACCESS_AUD = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "finance-db"
+database_id = "c5a8cd75-fb52-4242-bf7c-0ae40b38062b"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "finance-files"
+
+# 毎月5日 06:00 JST（= 4日 21:00 UTC）に前月分を freee から取り込む
+[triggers]
+crons = ["0 21 4 * *"]
+
+# Secrets（wrangler secret put で登録。Git には置かない）
+#   FREEE_CLIENT_ID      freee 自社アプリの Client ID
+#   FREEE_CLIENT_SECRET  freee 自社アプリの Client Secret
+#   TOKEN_ENC_KEY        freee トークン暗号化鍵（32バイトを base64。openssl rand -base64 32）

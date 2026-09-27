@@ -1,6 +1,6 @@
 # 引き継ぎ書：悠三堂 銀行提出用 月次試算表アプリ
 
-最終更新: 2026-09-27（設計 v0.2、依頼者レビュー反映）
+最終更新: 2026-09-27（実装 v0.1。設計 v0.3）
 読者: 次にこのリポジトリを触る人（人間・Claude Code セッションのどちらでも）
 
 読む順番: `docs/00_request.md` → `docs/01_design.md` → `docs/02_project_plan.md` → 本書。
@@ -11,10 +11,10 @@
 
 | 項目 | 状態 |
 |---|---|
-| フェーズ | 設計 v0.2（依頼者レビュー反映済み）。実装は未着手。リポジトリにはドキュメントのみ |
+| フェーズ | 実装 v0.1 完了（MVP＋Phase 2 の大半）。本番デプロイ前。進捗の詳細は `02_project_plan.md` §1.5 |
 | ブランチ | `claude/admiring-allen-fxcbys` |
 | 決定済み | ドメイン `finance.yusando.com`。棚卸補正は据置法（期首棚卸高＝月末棚卸高）を採用、比較年度にも同法を適用 |
-| 次にやること | 残りの未決事項（Q1 残置額の税理士確認、Q3, Q5, Q6, Q8）→ Phase 0（`02_project_plan.md` §4 の準備物） |
+| 次にやること | 代表：README「初回セットアップ」（freee 自社アプリ登録 → Secrets → Access → デプロイ → 初回取込）。開発：実 freee での取込確認、税理士レビュー反映、Phase 2〜3 の残り |
 
 ## 2. 会社・会計の前提知識
 
@@ -32,7 +32,7 @@
 |---|---|
 | freee 事業所ID | `796362`（株式会社　悠三堂） |
 | freee 連携 | 本セッションは Claude の freee MCP 経由で参照した。アプリ本体は自社アプリ（OAuth2）を新規登録する（Phase 0）。Client ID/Secret は `wrangler secret`、Git には置かない |
-| Cloudflare | 既存 Workers: news / yusando-gallery / kiroku / zenshu-advisor。D1: gallery-db / yusando-jas。R2: gallery-photos / zenshu-pdf。KV は未使用。本アプリ用に `shisan-db`（D1）・`shisan-files`（R2）を新規作成予定 |
+| Cloudflare | Worker 名 `finance`（未デプロイ）。D1 `finance-db`（ID `c5a8cd75-fb52-4242-bf7c-0ae40b38062b`、APAC、スキーマ適用済み）。R2 `finance-files`。既存の他アプリ: news / yusando-gallery / kiroku / zenshu-advisor |
 | 公開URL | `https://finance.yusando.com`（Workers カスタムドメイン + Cloudflare Access） |
 | 棚卸関連の勘定科目ID | `01_design.md` 付録A-3 |
 | 依頼者 | 礒﨑 遼太郎（isozaki@yusando.com） |
@@ -52,6 +52,10 @@
 | 決算確定年度の応答は D1 に永続キャッシュ | 変わらないデータを毎回取らない |
 
 ## 5. 既知の課題・注意点
+
+- **yusando.com の DNS の所在を未確認**（開発環境から DNS 照会ができなかった）。Cloudflare にあれば `finance.yusando.com` をそのまま使える。Route 53 のままなら README の B 案（workers.dev + Access）。
+- freee 実 API での取込は、OAuth 登録前のため未確認。応答の正規化（`src/freee/client.ts` の `fetchReport`）は freee MCP で取得した実応答の形に合わせてある。
+- 月次推移の単月データは、テスト用フィクスチャでは主要な合計行だけを持つ。実取込では全行が入る。
 
 1. **B/S 棚卸資産の残置額 931,966 円**（製品 63,967 / 原材料 96,415 / 仕掛品 771,584）。期首振替で戻らず常に残る。前期末 B/S 棚卸資産 6,115,955 と P/L 期末棚卸 5,183,989 の差に一致。税理士確認待ち。帳票では「残置額」として別建て。
 2. freee `trial_*` API は `start_month`〜`end_month` で年度をまたげない。3〜2月は同一年度内として指定できる（例: `fiscal_year=2025, start_month=3, end_month=2`）。
@@ -73,15 +77,15 @@
 
 ## 7. 未決事項（回答待ち）
 
-`01_design.md` §12 のうち Q2・Q7 は決定済み。残りは Q1（残置額の税理士確認）、Q3（減価償却月割の既定）、Q5（PDF 方式）、Q6（税理士の権限）、Q8（月次推移の按分）。Q4（単価初期値）は A を使う段階まで不要。
+`01_design.md` §12 のうち Q2・Q5・Q7・Q8 は決定済み。残りは Q1（残置額の税理士確認）、Q3（減価償却月割の既定。現在は OFF）、Q6（税理士の権限。現在は Access に入れた人は全員編集可）。Q4（単価初期値）は実地簡易入力を使う段階まで不要。
 
 ## 8. 次のセッションでの着手手順
 
-1. `docs/` を読む（所要 15 分）。
-2. §12 の回答があれば `01_design.md` を更新。
-3. Phase 0 の雛形を作る: `package.json`、`wrangler.toml`（D1/R2/Cron バインディング）、`src/worker/index.ts`（Hono）、`src/web/`（Vite + Preact）、`src/worker/db/migrations/0001_init.sql`（設計 §6 の DDL）。
-4. freee OAuth を実装し `GET /api/periods` が動いたら Phase 0 完了。
-5. セッションの終わりに本書 §1「現在地」と §7 を更新してコミット・プッシュ。
+1. `README.md` と本書を読む。`npm install && npm run check` が通ることを確認。
+2. ローカルで `npm run dev` → 取込画面の「デモデータ投入」で画面を確認できる。
+3. 代表が README「初回セットアップ」を終えていれば、本番で実際に取り込み、デモ（付録A）と数値が一致するか確認する。
+4. 残タスク（優先順）：税理士レビューの反映 → 添付 PDF の結合出力 → その他補正（任意科目の手入力）→ D1 バックアップ（GitHub Actions）→ 資金繰り表。
+5. セッションの終わりに本書 §1 と `02_project_plan.md` §1.5 を更新してコミット・プッシュ。
 
 ## 9. 用語
 

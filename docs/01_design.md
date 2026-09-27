@@ -1,7 +1,7 @@
-# 設計図：悠三堂 銀行提出用 月次試算表アプリ（仮称「shisan」）
+# 設計図：悠三堂 銀行提出用 月次試算表アプリ（finance）
 
 作成日: 2026-09-27
-版: v0.2（2026-09-27 依頼者レビュー反映: ドメイン決定、棚卸補正は据置法を採用）
+版: v0.3（2026-09-27 実装反映。実装と食い違う場合はコードと `migrations/` が正）
 対象: 株式会社悠三堂（freee 事業所ID 796362、決算期 3月1日〜翌2月末日）
 
 ---
@@ -136,7 +136,7 @@ flowchart LR
 |---|---|---|
 | 実行環境 | Cloudflare Workers | 既存4アプリと同一基盤。無料枠で足りる。Secrets 管理あり |
 | Webフレームワーク | Hono | Workers 標準的。軽量、型付きルーティング |
-| フロント | Vite + TypeScript + Preact | 画面数が少ない（6画面）。ビルドが軽く引き継ぎやすい。React 経験者ならそのまま読める |
+| 画面 | Hono JSX によるサーバー描画（フォーム POST → リダイレクト） | 実装時に変更。画面は表とフォームが中心で、別ビルドのフロントを持たない方が保守しやすい。印刷用ページも同じ仕組みで出せる |
 | DB | D1 (SQLite) | 既存 gallery-db 等と同じ。JSON スナップショット保存に十分 |
 | ファイル | R2 | 添付・確定PDF。既存 gallery-photos と同じ運用 |
 | 認証 | Cloudflare Access（Google IdP、@yusando.com 限定） | アプリ側に認証コードを持たない。税理士は個別メール許可 |
@@ -238,7 +238,7 @@ sequenceDiagram
 
 | 補正 | 計算 | 備考 |
 |---|---|---|
-| 減価償却費 月割 | 前期実績 394,604 ÷ 12 × 経過月数（2026/8: 197,301） | 販管費に加算し利益を減らす。固定資産APIから当期見込を取れれば置換 |
+| 減価償却費 月割 | 前期実績 394,604 ÷ 12 × 経過月数（月額を先に円未満四捨五入。2026/8: 32,884 × 6 = 197,304） | 販管費に加算し利益を減らす。固定資産APIから当期見込を取れれば置換 |
 | 賞与・法定福利費の引当 | 未対応 | 必要になれば手入力補正として汎用「その他補正」で対応 |
 
 汎用「その他補正」：科目・金額・摘要を手入力し、同じブリッジ表に載せる。
@@ -254,6 +254,12 @@ sequenceDiagram
 ---
 
 ## 6. データモデル（D1）
+
+> **実装版は `migrations/0001_init.sql` が正。** 設計時からの差分：
+> `unit_costs` は廃止（数量・単価・金額は `inventory_inputs` に直接保存）。`snapshots` のキーは (fy, kind, start_month, end_month) にし、
+> 単月 P/L も同じ表に持つ。`app_meta`（会社名など）を追加。`loans` に借入先別残高 `balance_override`、`packages` に `memo` を追加し `status` は廃止（保存した版はすべて確定版）。
+> D1 名は `finance-db`、R2 名は `finance-files`（2026-09-27 作成済み）。
+
 
 ```sql
 -- 年度マスタ（freee companies.fiscal_years を同期）
@@ -358,6 +364,13 @@ CREATE TABLE audit_log (
 
 ## 7. API 設計（Workers / Hono）
 
+> **実装では JSON API ではなく、画面とフォームのルートにした。** 実際のルート：
+> `GET /report` 試算表、`GET /print` 提出用（下書き）、`GET /print/package/:id` 確定版、`GET|POST /sync` 取込、`GET /auth/freee/start|callback`、
+> `GET|POST /adjust` 棚卸補正、`GET|POST /initiatives`・`POST /initiatives/:id/delete`、`POST /attachments`・`GET /files/:id`・`POST /attachments/:id/delete`、
+> `GET|POST /loans`・`POST /loans/:id/delete`、`GET /history`・`POST /packages`・`POST /packages/:id`、`POST /dev/seed`（DEV_MODE のみ）。
+> 以下は設計時の案として残す。
+
+
 | メソッド | パス | 内容 |
 |---|---|---|
 | GET | `/auth/freee/start` → `/auth/freee/callback` | OAuth 認可・トークン保存 |
@@ -406,7 +419,7 @@ CREATE TABLE audit_log (
 │ 対象: FY2026 ▼  2026年8月 ▼   最終取込 2026-09-27 20:43  ● 集計完了  │
 │                                                              │
 │  売上高 13,779,723 (前期同期比 +2.9%)   補正後 経常 +3,0xx,xxx      │
-│  freee値 ▲2,092,371 → 棚卸補正 +5,183,989 → 減価償却 ▲197,301     │
+│  freee値 ▲2,092,371 → 棚卸補正 +5,183,989 → 減価償却 ▲197,304     │
 │                                                              │
 │  [PDFを作成]  [この月を確定して提出履歴に保存]                        │
 └──────────────────────────────────────────────────────────────┘
@@ -455,30 +468,9 @@ CREATE TABLE audit_log (
 
 ---
 
-## 11. リポジトリ構成（予定）
+## 11. リポジトリ構成（実装）
 
-```
-finance/
-├─ README.md
-├─ docs/                       設計・計画・引き継ぎ（本書群）
-├─ wrangler.toml               Workers / D1 / R2 / Cron 設定
-├─ package.json
-├─ src/
-│  ├─ worker/                  Hono アプリ
-│  │  ├─ index.ts
-│  │  ├─ routes/               auth, sync, report, adjustments, initiatives, attachments, loans, packages, print
-│  │  ├─ freee/                client.ts(OAuth/呼び出し), mappers.ts(応答→内部行)
-│  │  ├─ report/               assemble.ts(帳票組立), inventory.ts(補正A/B/C), checks.ts(検算)
-│  │  └─ db/                   migrations/*.sql, repo.ts
-│  └─ web/                     Vite + Preact 画面
-│     ├─ pages/                dashboard, sync, inventory, initiatives, loans, history
-│     ├─ print/                印刷レイアウト
-│     └─ lib/                  format(3桁区切り・▲), api client
-├─ test/                       inventory.test.ts(補正ロジック), checks.test.ts, mappers.test.ts（付録Aの実データをフィクスチャに）
-└─ .github/workflows/          ci.yml(型チェック・テスト), backup.yml(D1 export → R2)
-```
-
----
+README の「構成」を参照。帳票ロジックは `src/report/`（純粋関数）に集め、`test/report.test.ts` が付録B の数値を検証する。
 
 ## 12. 未決事項（レビューで決めたいこと）
 
@@ -488,10 +480,10 @@ finance/
 | Q2 | 補正の既定方法 | A / B / C | **決定（2026-09-27）**: B 据置法を採用。A は任意の上書き |
 | Q3 | 減価償却月割 | 既定 ON / OFF | OFF（注記のみ）。銀行の要望で ON |
 | Q4 | 単価マスタの初期値（荒茶 円/kg、製品原価） | 代表が提示 | A を使う段階（Phase 2 以降）で用意。初版では不要 |
-| Q5 | PDF 生成方式 | 印刷CSS / Browser Rendering | 初版は印刷CSS |
+| Q5 | PDF 生成方式 | 印刷CSS / Browser Rendering | **決定（実装）**: 印刷CSS。A4縦、月次推移のみ A4横。1セクション1ページに収まることを確認済み |
 | Q6 | 税理士のアクセス | 閲覧のみ / 補正編集可 | 閲覧のみ |
 | Q7 | アプリ名・ドメイン | — | **決定（2026-09-27）**: `finance.yusando.com` |
-| Q8 | 月次推移の補正按分 | 累計のみ / 月按分 | 累計のみ（月按分は根拠が弱い） |
+| Q8 | 月次推移の補正按分 | 累計のみ / 月按分 | **決定（実装）**: 据置法では累計の補正額が毎月一定なので、月次の増分は「期首月に +ΣE、他の月は 0」になる。月次推移はこの形（期首棚卸振替の戻し）で表示し、合計は累計と一致する。任意の按分はしない |
 
 ---
 
@@ -606,7 +598,7 @@ E_製品 = 368,295、E_仕掛品 = 4,675,808、E_原材料 = 139,886（いずれ
 前期同期の補正額は前期の期首棚卸高 5,051,549（516,003 + 4,405,050 + 130,496）、
 前々期同期は 6,836,469（435,430 + 6,206,804 + 194,235）。商品売上原価（前期同期 39,000、前々期同期 99,000）は売上原価に含めた。
 
-参考: 減価償却月割 ON の場合、197,301（32,884 × 6ヶ月）を販管費に加算し、補正後 経常損益は 2,894,317。
+参考: 減価償却月割 ON の場合、197,304（32,884 × 6ヶ月）を販管費に加算し、補正後 経常損益は 2,894,314。
 
 ### B-3. 残高試算表（補正後、2026-08-31）
 
@@ -637,3 +629,4 @@ B/S の棚卸資産は「残置額 931,966 + 据置見積 5,183,989」として�
 |---|---|---|
 | v0.1 | 2026-09-27 | 初版 |
 | v0.2 | 2026-09-27 | 依頼者レビュー反映。ドメイン `finance.yusando.com` 決定（Q7）。棚卸補正は据置法を採用、A は任意に変更（Q2, Q4）。比較年度にも同法を適用する旨を追記。付録B（補正計算例）追加 |
+| v0.3 | 2026-09-27 | 実装反映。画面を Hono JSX サーバー描画に変更、データモデル・ルートの差分を注記、Q5・Q8 を決定、減価償却月割の端数処理を明記 |

@@ -1,0 +1,25 @@
+{
+  "name": "yusando-finance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "悠三堂 銀行提出用 月次試算表アプリ (finance.yusando.com)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply finance-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply finance-db --remote"
+  },
+  "dependencies": {
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260927.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.141.0"
+  }
+}

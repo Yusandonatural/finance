@@ -1,0 +1,48 @@
+@page { size: A4 portrait; margin: 14mm 12mm; }
+@page wide { size: A4 landscape; margin: 12mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif; color: #000; background: #eee; font-size: 9.5pt; line-height: 1.5; }
+.toolbar { position: sticky; top: 0; background: #333; color: #fff; padding: 8px 16px; display: flex; gap: 16px; align-items: center; font-family: system-ui, sans-serif; z-index: 5; }
+.toolbar button { font-size: 14px; padding: 6px 14px; cursor: pointer; }
+.toolbar .err { color: #ff9a9a; font-weight: 700; }
+.watermark { position: fixed; top: 45%; left: 0; right: 0; text-align: center; font-size: 110pt; color: rgba(0, 0, 0, 0.06); transform: rotate(-20deg); pointer-events: none; z-index: 0; }
+.sheet { background: #fff; width: 210mm; min-height: 297mm; margin: 12px auto; padding: 14mm 12mm; position: relative; page-break-after: always; break-after: page; }
+.sheet.landscape { width: 297mm; min-height: 210mm; page: wide; }
+.sheet h2 { font-size: 12pt; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin: 0 0 6px; }
+.sheet h3 { font-size: 10.5pt; margin: 14px 0 4px; }
+.sub { font-size: 8.5pt; color: #333; margin: 2px 0 6px; }
+.cover { text-align: left; }
+.cover .company { font-size: 13pt; margin-top: 30mm; }
+.cover h1 { font-size: 24pt; margin: 6mm 0 2mm; }
+.cover .period { font-size: 11pt; margin-bottom: 10mm; }
+table.meta { border-collapse: collapse; margin-bottom: 8mm; }
+table.meta th { text-align: left; padding: 3px 14px 3px 0; font-weight: 400; color: #333; white-space: nowrap; vertical-align: top; }
+table.meta td { padding: 3px 0; }
+ol.notes { padding-left: 18px; font-size: 9pt; }
+ol.notes li { margin-bottom: 4px; }
+ol.toc { padding-left: 18px; }
+table.fin { border-collapse: collapse; width: 100%; font-size: 7.8pt; line-height: 1.22; font-variant-numeric: tabular-nums; font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; }
+table.fin th, table.fin td { border-bottom: 0.5px solid #aaa; padding: 0.9px 4px; white-space: nowrap; }
+table.fin th { border-top: 1px solid #000; border-bottom: 1px solid #000; text-align: right; font-weight: 600; font-size: 7.6pt; white-space: normal; }
+table.fin th.name, table.fin td.name { text-align: left; }
+table.fin td.num { text-align: right; }
+table.fin tr.total td { font-weight: 700; background: #f2f2f2; }
+table.fin tr.synthetic td { font-style: italic; background: #f7f7f7; }
+table.fin tr.lv3 td.name { padding-left: 10px; }
+table.fin tr.lv4 td.name { padding-left: 16px; }
+table.fin tr.lv5 td.name { padding-left: 22px; }
+table.fin.monthly { font-size: 7.4pt; }
+table.fin.monthly tr.sub td { color: #444; }
+table.fin.monthly tr.first td { border-top: 0.8px solid #000; }
+.neg { color: #000; }
+.initiative { margin-bottom: 8px; page-break-inside: avoid; }
+table.kv { border-collapse: collapse; width: 100%; font-size: 9pt; }
+table.kv th { text-align: left; width: 22mm; vertical-align: top; font-weight: 400; color: #333; padding: 2px 6px 2px 0; }
+table.kv td { padding: 2px 0; white-space: pre-wrap; }
+@media print {
+  body { background: #fff; }
+  .noprint { display: none !important; }
+  .sheet { margin: 0; width: auto; min-height: 0; padding: 0; }
+  .sheet.landscape { width: auto; min-height: 0; }
+  .watermark { position: fixed; }
+}
