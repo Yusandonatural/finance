@@ -5,6 +5,9 @@ import { yen } from '../lib/format';
 import { adjusted, findTotal } from '../report/lines';
 import type { Report } from '../report/types';
 import { BridgeTable, BsTable, FlowTable, InventoryTable, MonthlyTable, PastFyTable, SensitivityTable, Yen } from './components';
+import { raw } from 'hono/html';
+import { groupedBars, waterfall } from './charts';
+import { fyLabel } from '../lib/fiscal';
 
 export interface PackageData {
   report: Report;
@@ -38,6 +41,14 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const commonAtt = data.attachments.filter((a) => a.initiative_id === null);
   const dateStr = new Date(createdAt ?? r.meta.generatedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' });
   let no = 0;
+  const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
+  const col = (key: string, c: number) => (ser(key)?.values ?? []).map((v) => (v ? v[c] : null));
+  const cats = r.monthly.months.map((x) => x.label);
+  const steps = [
+    { label: 'freee 上の\n純損益', value: r.bridge.rawNetIncome, kind: 'total' as const },
+    ...r.bridge.items.map((i) => ({ label: i.label.replace(/^月末/, '').replace(/棚卸 見積$/, '\n棚卸').replace('（荒茶など）', '').replace(/^減価償却費 月割.*/, '減価償却\n月割'), value: i.amount, kind: 'delta' as const })),
+    { label: '補正後の\n純損益', value: r.bridge.adjustedNetIncome, kind: 'total' as const },
+  ];
   return (
     <html lang="ja">
       <head>
@@ -45,6 +56,10 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex,nofollow" />
         <title>{`${m.companyName} ${title}`}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&display=swap" rel="stylesheet" />
+        <style>{raw(`@page { @top-right { content: "${m.companyName.replace(/["\\<>]/g, '')}　${title}"; } }`)}</style>
         <link rel="stylesheet" href="/print.css" />
       </head>
       <body>
@@ -56,46 +71,61 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
         {!version && <div class="watermark">下書き</div>}
 
         <section class="sheet cover">
-          <p class="company">{m.companyName}</p>
-          <h1>{title}</h1>
-          <p class="period">{m.periodLabel}</p>
-          <table class="meta">
-            <tbody>
-              <tr>
-                <th>作成日</th>
-                <td>{dateStr}</td>
-              </tr>
-              <tr>
-                <th>版</th>
-                <td>{version ? `第${version}版` : '下書き'}</td>
-              </tr>
-              <tr>
-                <th>出典</th>
-                <td>freee 会計（{m.fetchedAt ? new Date(m.fetchedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '—'} 取得、集計{m.upToDate ? '完了' : '未完了'}）</td>
-              </tr>
-              <tr>
-                <th>月末棚卸</th>
-                <td>{m.method === 'manual' ? '実地簡易棚卸（未入力区分は期首棚卸高を据置）' : '期首棚卸高を据置（据置法）'}</td>
-              </tr>
-            </tbody>
-          </table>
-          <h3>作成基準</h3>
-          <ol class="notes">
-            {r.notes.map((n) => (
-              <li>{n}</li>
-            ))}
-          </ol>
-          <h3>目次</h3>
-          <ol class="toc">
-            <li>損益計算書（累計・3期比較）</li>
-            <li>製造原価報告書（累計・3期比較）</li>
-            <li>貸借対照表</li>
-            <li>月次推移</li>
-            <li>月末棚卸の見積と補正</li>
-            <li>借入金明細</li>
-            <li>当期の施策と添付資料</li>
-            <li>過去の決算</li>
-          </ol>
+          <div class="cover-top">
+            <span class="cover-mark">悠</span>
+            <span class="cover-kind">金融機関ご提出用資料</span>
+          </div>
+          <div class="cover-title">
+            <p class="cover-period">{fyLabel(m.fy, m.fyStartMonth)}</p>
+            <h1>
+              月次試算表
+              <span>{monthLabel(m.fy, m.fyStartMonth, m.month)}末</span>
+            </h1>
+            <p class="cover-sub">{m.periodLabel}・前期／前々期同期比較</p>
+          </div>
+          <div class="cover-grid">
+            <div>
+              <h3>作成基準</h3>
+              <ol class="notes">
+                {r.notes.map((n) => (
+                  <li>{n}</li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <h3>目次</h3>
+              <ol class="toc">
+                <li>損益計算書（累計・3期比較）</li>
+                <li>製造原価報告書（累計・3期比較）</li>
+                <li>貸借対照表</li>
+                <li>月次推移</li>
+                <li>月末棚卸の見積と補正</li>
+                <li>借入金明細</li>
+                <li>当期の施策と添付資料</li>
+                <li>過去の決算</li>
+              </ol>
+              <table class="meta">
+                <tbody>
+                  <tr>
+                    <th>版</th>
+                    <td>{version ? `第${version}版` : '下書き'}</td>
+                  </tr>
+                  <tr>
+                    <th>出典</th>
+                    <td>freee 会計（{m.fetchedAt ? new Date(m.fetchedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '—'} 取得）</td>
+                  </tr>
+                  <tr>
+                    <th>月末棚卸</th>
+                    <td>{m.method === 'manual' ? '実地簡易棚卸（未入力区分は据置）' : '期首棚卸高を据置（据置法）'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="cover-foot">
+            <p class="company">{m.companyName}</p>
+            <p class="date">{dateStr}</p>
+          </div>
         </section>
 
         <Page title="損益計算書（累計・3期比較）" no={++no}>
@@ -112,13 +142,32 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
         </Page>
         <Page title="月次推移" no={++no} cls="landscape">
           <p class="sub">単位：円　棚卸補正は期首月の期首棚卸振替の戻しとして反映</p>
+          <div class="chart-row">
+            <figure>
+              <figcaption>
+                月次売上高 <span class="legend"><i class="sw cur"></i>当期 <i class="sw prev"></i>前期</span>
+              </figcaption>
+              {raw(groupedBars({ categories: cats, series: [{ name: '当期', cls: 'cur', values: col('sales', 0) }, { name: '前期', cls: 'prev', values: col('sales', 1) }], height: 230, ariaLabel: '月次売上高' }))}
+            </figure>
+            <figure>
+              <figcaption>
+                月次経常利益 <span class="legend"><i class="sw cur"></i>当期 <i class="sw prev"></i>前期</span>
+              </figcaption>
+              {raw(groupedBars({ categories: cats, series: [{ name: '当期', cls: 'cur', values: col('ord', 0) }, { name: '前期', cls: 'prev', values: col('ord', 1) }], height: 230, ariaLabel: '月次経常利益' }))}
+            </figure>
+          </div>
           <MonthlyTable r={r} />
         </Page>
         <Page title="月末棚卸の見積と補正" no={++no}>
           <h3>月末棚卸</h3>
           <InventoryTable r={r} />
           <h3>当期純損益への影響（freee 値からの増減）</h3>
-          <BridgeTable r={r} />
+          <div class="chart-row">
+            <figure>{raw(waterfall(steps, '当期純損益の補正内訳'))}</figure>
+            <div>
+              <BridgeTable r={r} />
+            </div>
+          </div>
           <h3>見積方法による違い（参考）</h3>
           <SensitivityTable r={r} />
         </Page>

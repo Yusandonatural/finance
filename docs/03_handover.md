@@ -51,6 +51,15 @@
 | 3期比較は freee `*_three_years` API を使う | 同一期間累計の前期・前々期を1回で取れる |
 | 決算確定年度の応答は D1 に永続キャッシュ | 変わらないデータを毎回取らない |
 
+## 4.5 画面デザイン（2026-09-28）
+
+- 配色：紙の白（`--bg #f6f5f0`）と茶葉の緑（`--accent #237a4f`）。ライト／ダークの両方を `public/app.css` の CSS 変数で定義。
+- グラフは `src/views/charts.ts` がサーバー側で SVG を描く（外部ライブラリなし）。ホバー時の数値表示は `public/app.js`。
+- グラフの系列色（当期＝緑、前期＝琥珀）は色覚シミュレーションで判別できることを検証済み。light `#237a4f / #d09a45`、dark `#1a7a48 / #bf8a2a`。変えるときは再検証すること。
+- フォントは Google Fonts（Noto Sans JP、見出しに Noto Serif JP / Shippori Mincho）。読めない環境では OS のフォントで表示される。
+- 提出用ページは表紙＋8セクションで A4 9ページ。ページ番号とヘッダーは `@page` の余白ボックスで出す（Chrome 131 以降）。月次推移は A4 横。
+- 注意：印刷時、flex / grid で並べた SVG は Chrome が次ページへ送ることがあるため、`.chart-row` は inline-block で並べている。
+
 ## 5. 既知の課題・注意点
 
 - **yusando.com の DNS の所在を未確認**（開発環境から DNS 照会ができなかった）。Cloudflare にあれば `finance.yusando.com` をそのまま使える。Route 53 のままなら README の B 案（workers.dev + Access）。

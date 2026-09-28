@@ -8,12 +8,13 @@ export const Yen: FC<{ v: number | null | undefined; signed?: boolean }> = ({ v,
 );
 
 /** 全列ゼロの明細行は表示しない（合計行は常に表示） */
-function visible(l: Line, compact = false): boolean {
+function visible(l: Line, _compact = false): boolean {
   const vals = [...l.raw, ...l.adj, ...(l.fyEnd ?? []).map((x) => x ?? 0)];
   const nonZero = vals.some((v) => v !== 0);
   if (l.synthetic) return true;
   // 画面では合計行を常に出す。提出用（compact）では全期間ゼロの合計行も省く
-  if (l.isTotal) return !compact || nonZero || l.level <= 1;
+  // 全期間ゼロの行は省く（大区分の合計行だけは残す）
+  if (l.isTotal) return nonZero || l.level <= 1;
   return nonZero;
 }
 
@@ -239,7 +240,7 @@ export const SensitivityTable: FC<{ r: Report }> = ({ r }) => (
           </td>
           <Yen v={s.inventory} />
           <Yen v={s.netIncome} />
-          <td class="name">{s.note}</td>
+          <td class="name note">{s.note}</td>
         </tr>
       ))}
     </tbody>
@@ -249,9 +250,10 @@ export const SensitivityTable: FC<{ r: Report }> = ({ r }) => (
 export const Checks: FC<{ r: Report }> = ({ r }) => (
   <ul class="checks">
     {r.checks.map((c) => (
-      <li class={c.ok ? 'ok' : c.severity}>
+      <li class={c.ok ? 'ok' : c.severity} title={c.detail}>
         <span class="mark">{c.ok ? '✓' : c.severity === 'error' ? '✕' : '!'}</span>
-        <b>{c.label}</b> <span class="muted">{c.detail}</span>
+        <b>{c.label}</b>
+        {!c.ok && <span class="muted">{c.detail}</span>}
       </li>
     ))}
   </ul>
