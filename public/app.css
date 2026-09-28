@@ -179,12 +179,12 @@ form.upload input[type='text'] { flex: 1 1 220px; }
 .kpi-val .unit { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 3px; }
 .kpi-val.neg { color: var(--bad); }
 .kpi-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; }
-.kpi-sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.kpi-sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .delta.good { background: var(--good-soft); color: var(--good); }
 .delta.bad { background: var(--bad-soft); color: var(--bad); }
 .delta.flat { background: var(--surface-3); color: var(--ink-2); }
-.spark { width: 96px; height: 30px; flex: none; }
+.spark { width: 76px; height: 28px; flex: none; }
 .spark path { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; opacity: 0.8; }
 .spark circle { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
 .spark-zero { stroke: var(--line-2); stroke-dasharray: 2 2; }
