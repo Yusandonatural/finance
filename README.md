@@ -9,6 +9,7 @@ freee 会計のデータから、**月末棚卸を据置法で補正した**銀�
 | [docs/01_design.md](docs/01_design.md) | 設計図（棚卸補正ロジック、データ、画面、帳票） |
 | [docs/02_project_plan.md](docs/02_project_plan.md) | 制作予定書 |
 | [docs/03_handover.md](docs/03_handover.md) | 引き継ぎ書（現在地・決定事項・次の手順） |
+| [docs/04_monthly_checklist.md](docs/04_monthly_checklist.md) | 毎月の試算表づくりのチェックリスト |
 
 ## 構成
 
@@ -100,6 +101,8 @@ npm run deploy
 4. 「試算表」で内容と検算を確認 →「銀行提出用ページを開く」→ ブラウザの印刷から PDF 保存
 
 ## 毎月の使い方
+
+詳しい手順は [docs/04_monthly_checklist.md](docs/04_monthly_checklist.md)。概要：
 
 1. 毎月5日に前月分が自動で取り込まれる（手動でも取込可）
 2. 必要なら「棚卸補正」で実地簡易棚卸の数量・単価を入力（入力しなければ据置法）
