@@ -291,7 +291,7 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 export const SyncPage: FC<{
-  status: { connected: boolean; updatedAt?: string; error?: string };
+  status: { connected: boolean; updatedAt?: string; error?: string; connector?: boolean };
   configured: boolean;
   fys: FreeeFiscalYear[];
   suggest: { fy: number; month: number };
@@ -366,7 +366,9 @@ export const SyncPage: FC<{
           </div>
           {status.connected && status.updatedAt && <p class="muted">トークン更新 {jst(status.updatedAt)}</p>}
           {status.error && <p class="muted">{status.error}</p>}
-          {configured ? (
+          {status.connector ? (
+            <p class="muted">claude.ai に接続している freee コネクタを使います。取り込めないときは、claude.ai の「設定 → コネクタ」で freee を接続し直してください。</p>
+          ) : configured ? (
             <a class="btn" href="/auth/freee/start">
               {status.connected ? 'freee と再接続' : 'freee と接続'}
             </a>
@@ -647,7 +649,7 @@ export const InitiativesPage: FC<{ fy: number; fys: FreeeFiscalYear[]; items: In
                 <a class="btn small" href={`/initiatives?fy=${fy}&edit=${i.id}#form`}>
                   編集
                 </a>
-                <form method="post" action={`/initiatives/${i.id}/delete`} class="inline" onsubmit="return confirm('この施策を削除しますか？')">
+                <form method="post" action={`/initiatives/${i.id}/delete`} class="inline" data-confirm="この施策を削除しますか？">
                   <input type="hidden" name="fy" value={String(fy)} />
                   <button class="btn small danger">削除</button>
                 </form>
@@ -732,7 +734,7 @@ const AttachmentList: FC<{ items: Attachment[]; fy: number }> = ({ items, fy }) 
         <li>
           <span class="file-ico">{extOf(a.filename)}</span>
           <span class="grow">
-            <a href={`/files/${a.id}`} target="_blank">
+            <a href={a.url ?? `/files/${a.id}`} target="_blank" rel="noopener">
               {a.title}
             </a>
             <br />
@@ -740,7 +742,7 @@ const AttachmentList: FC<{ items: Attachment[]; fy: number }> = ({ items, fy }) 
               {a.filename}・{Math.ceil((a.size ?? 0) / 1024).toLocaleString()} KB
             </span>
           </span>
-          <form method="post" action={`/attachments/${a.id}/delete`} class="inline" onsubmit="return confirm('添付を削除しますか？')">
+          <form method="post" action={`/attachments/${a.id}/delete`} class="inline" data-confirm="添付を削除しますか？">
             <input type="hidden" name="fy" value={String(fy)} />
             <button class="btn small danger">削除</button>
           </form>
@@ -756,7 +758,7 @@ const UploadForm: FC<{ fy: number; initiativeId: number | null }> = ({ fy, initi
     <input type="hidden" name="fy" value={String(fy)} />
     {initiativeId !== null && <input type="hidden" name="initiative_id" value={String(initiativeId)} />}
     <input type="text" name="title" placeholder="資料名（例：2026年度 事業計画書）" required />
-    <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc,.csv" />
+    <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls,.docx,.doc" />
     <button class="btn small">添付する</button>
   </form>
 );
@@ -835,7 +837,7 @@ export const LoansPage: FC<{ loans: Loan[]; borrowings: Report['borrowings'] | n
                     <a class="btn small" href={`/loans?edit=${l.id}#form`}>
                       編集
                     </a>{' '}
-                    <form method="post" action={`/loans/${l.id}/delete`} class="inline" onsubmit="return confirm('削除しますか？')">
+                    <form method="post" action={`/loans/${l.id}/delete`} class="inline" data-confirm="削除しますか？">
                       <button class="btn small danger">削除</button>
                     </form>
                   </td>

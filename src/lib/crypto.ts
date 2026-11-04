@@ -1,6 +1,6 @@
 /** AES-GCM による文字列の暗号化。鍵は 32 バイトを base64 にしたもの */
 
-function b64ToBytes(b64: string): Uint8Array {
+function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);

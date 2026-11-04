@@ -23,7 +23,7 @@ async function getKeys(team: string): Promise<Jwk[]> {
   return body.keys;
 }
 
-function b64urlToBytes(s: string): Uint8Array {
+function b64urlToBytes(s: string): Uint8Array<ArrayBuffer> {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
   return b64ToBytes(b64);
 }
@@ -49,6 +49,11 @@ export async function verifyAccessJwt(token: string, team: string, aud: string, 
 
 export const accessAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const env = c.env;
+  if (env.CLIENT_MODE === '1') {
+    // claude.ai 版：アーティファクトの共有設定がアクセス制御になる
+    c.set('actor', 'claude.ai');
+    return next();
+  }
   if (env.DEV_MODE === '1') {
     c.set('actor', c.req.header('Cf-Access-Authenticated-User-Email') ?? 'dev@local');
     return next();

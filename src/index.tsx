@@ -76,9 +76,19 @@ const str = (v: unknown): string | null => {
 };
 
 function flash(c: Context<AppEnv>, msg: string, kind: 'ok' | 'error' = 'ok') {
+  if (c.env.FLASH) {
+    c.env.FLASH[kind] = msg;
+    return;
+  }
   setCookie(c, `flash_${kind}`, encodeURIComponent(msg), { path: '/', httpOnly: true, secure: c.env.DEV_MODE !== '1', sameSite: 'Lax', maxAge: 60 });
 }
 function takeFlash(c: Context<AppEnv>): { flash: string | null; error: string | null } {
+  if (c.env.FLASH) {
+    const out = { flash: c.env.FLASH.ok ?? null, error: c.env.FLASH.error ?? null };
+    c.env.FLASH.ok = null;
+    c.env.FLASH.error = null;
+    return out;
+  }
   const ok = getCookie(c, 'flash_ok');
   const er = getCookie(c, 'flash_error');
   if (ok) deleteCookie(c, 'flash_ok', { path: '/' });
@@ -151,7 +161,7 @@ app.get('/sync', async (c) => {
   const [status, fys, periods, logs] = await Promise.all([tokenStatus(c.env), listFiscalYears(c.env), listPeriods(c.env), recentAudit(c.env)]);
   const sm = fys.length ? startMonthOf(fys, fys[fys.length - 1].fy) : 3;
   const suggest = previousClosedMonth(new Date(), sm);
-  const configured = !!(c.env.FREEE_CLIENT_ID && c.env.FREEE_CLIENT_SECRET && c.env.TOKEN_ENC_KEY);
+  const configured = !!c.env.FREEE_MCP || !!(c.env.FREEE_CLIENT_ID && c.env.FREEE_CLIENT_SECRET && c.env.TOKEN_ENC_KEY);
   return c.html(
     <Layout title="取込" active="/sync" actor={c.get('actor')} {...takeFlash(c)}>
       <SyncPage status={status} configured={configured} fys={fys} suggest={suggest} periods={periods} logs={logs} dev={c.env.DEV_MODE === '1'} />
@@ -314,9 +324,15 @@ app.post('/attachments', async (c) => {
     return c.redirect(`/initiatives?fy=${fy}`);
   }
   const safeName = file.name.replace(/[\\/\u0000-\u001f]/g, '_').slice(-120);
-  const key = `attachments/${fy}/${crypto.randomUUID()}-${safeName}`;
+  const uid = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const key = `attachments/${fy}/${uid}-${safeName}`;
   // R2 は長さ不明のストリームを受け付けないため、20MB 上限の範囲でメモリに読み込んで保存する
-  await c.env.FILES.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
+  try {
+    await c.env.FILES.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
+  } catch (e) {
+    flash(c, (e as Error).message || '添付できませんでした', 'error');
+    return c.redirect(`/initiatives?fy=${fy}`);
+  }
   await insertAttachment(c.env, {
     fy,
     initiative_id: int(b.initiative_id),

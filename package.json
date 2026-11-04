@@ -8,10 +8,11 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "check": "npm run typecheck && vitest run",
     "db:migrate:local": "wrangler d1 migrations apply finance-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply finance-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply finance-db --remote",
+    "build:artifact": "node scripts/build-artifact.mjs"
   },
   "dependencies": {
     "hono": "^4.13.9"

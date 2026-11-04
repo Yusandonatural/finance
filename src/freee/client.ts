@@ -13,7 +13,33 @@ export class FreeeError extends Error {
   }
 }
 
+/** claude.ai 版：freee コネクタ（freee_api_get）経由で呼ぶ。エラーは対処がわかる文にして投げる */
+async function freeeViaConnector<T>(env: Env, path: string, query: Record<string, string | number>): Promise<T> {
+  try {
+    const r = await env.FREEE_MCP.callTool('freee', 'freee_api_get', { service: 'accounting', path, query }, { cache: false });
+    const p = r.payload;
+    if (typeof p === 'string') throw new FreeeError(`freee の応答を読み取れませんでした: ${p.slice(0, 200)}`, 502);
+    return p as T;
+  } catch (e) {
+    if (e instanceof FreeeError) throw e;
+    const code = (e as { code?: string }).code;
+    const msg = (e as { message?: string }).message ?? '';
+    const text: Record<string, string> = {
+      needs_reauth: 'freee の接続が切れています。claude.ai の「設定 → コネクタ」で freee を接続し直してください',
+      server_not_connected: 'freee がつながっていません。claude.ai の「設定 → コネクタ」で freee を追加してください',
+      selection_required: 'freee のコネクタが複数あります。表示された画面で使う方を選んでください',
+      not_in_manifest: 'この画面での freee の利用が許可されていません。アーティファクトの権限メニューから freee を許可してください',
+      approval_required: 'freee の利用を許可してから、もう一度取り込んでください',
+      blocked_by_policy: '組織の設定で、この画面から freee を使うことが止められています',
+      server_unavailable: 'freee に一時的につながりません。少し待ってから取り込み直してください',
+      tool_error: `freee がエラーを返しました: ${msg.slice(0, 300)}`,
+    };
+    throw new FreeeError(text[code ?? ''] ?? `freee の呼び出しに失敗しました（${code ?? 'unknown'}）: ${msg.slice(0, 200)}`, 502);
+  }
+}
+
 export async function freeeGet<T>(env: Env, path: string, query: Record<string, string | number>): Promise<T> {
+  if (env.FREEE_MCP) return freeeViaConnector<T>(env, path, query);
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, String(v));
   let token = await getAccessToken(env);
@@ -49,6 +75,11 @@ export async function fetchReport(env: Env, kind: ReportKind, fy: number, startM
 
 export async function fetchCompany(env: Env): Promise<{ name: string; fiscalYears: FreeeFiscalYear[] }> {
   const body = await freeeGet<{ company: { display_name?: string; name?: string; fiscal_years?: { start_date: string; end_date: string }[] } }>(env, `/api/1/companies/${env.FREEE_COMPANY_ID}`, {});
-  const fys = (body.company.fiscal_years ?? []).map((f) => ({ fy: Number(f.start_date.slice(0, 4)), start_date: f.start_date, end_date: f.end_date }));
+  let fys = (body.company.fiscal_years ?? []).map((f) => ({ fy: Number(f.start_date.slice(0, 4)), start_date: f.start_date, end_date: f.end_date }));
+  if (!fys.length) {
+    // 会社情報に年度が含まれない応答のときは、3月始まりとして直近の年度を作る
+    const y = new Date().getFullYear();
+    fys = [y - 4, y - 3, y - 2, y - 1, y].map((fy) => ({ fy, start_date: `${fy}-03-01`, end_date: `${fy + 1}-02-${new Date(Date.UTC(fy + 1, 2, 0)).getUTCDate()}` }));
+  }
   return { name: (body.company.display_name || body.company.name || '').replace(/　/g, ' '), fiscalYears: fys };
 }

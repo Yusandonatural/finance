@@ -11,6 +11,26 @@ freee 会計のデータから、**月末棚卸を据置法で補正した**銀�
 | [docs/03_handover.md](docs/03_handover.md) | 引き継ぎ書（現在地・決定事項・次の手順） |
 | [docs/04_monthly_checklist.md](docs/04_monthly_checklist.md) | 毎月の試算表づくりのチェックリスト |
 
+## 使い方は2通り
+
+| | claude.ai 版（いま使っている方） | Cloudflare 版 |
+|---|---|---|
+| 開き方 | claude.ai のアーティファクト「悠三堂 試算表」 | `https://finance.<アカウント>.workers.dev` |
+| freee | claude.ai に接続した freee コネクタ | freee の自社アプリ（OAuth） |
+| 保存先 | アーティファクトの db・assets | D1・R2 |
+| 取込 | 取込画面のボタン（自動取込なし） | ボタン＋毎月5日の自動取込 |
+| 提出用 | HTML ファイルを保存し、ブラウザで開いて PDF に印刷 | 提出用ページをそのまま印刷 |
+
+画面と計算は同じコード（`src/index.tsx` 以下）。claude.ai 版は `src/client/main.ts` がそのアプリをブラウザの中で動かし、保存先を `src/store/docs.ts` に切り替える。
+
+claude.ai 版を作り直すとき：
+
+```bash
+npm run build:artifact   # dist/finance-artifact.html ができる
+```
+
+できたファイルを、Claude に「同じアーティファクトに公開して」と頼む（権限：db・assets・downloads・freee コネクタの freee_api_get）。
+
 ## 構成
 
 - Cloudflare Workers（Hono + JSX のサーバー描画、TypeScript）

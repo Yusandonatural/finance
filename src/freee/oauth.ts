@@ -91,7 +91,8 @@ export async function getAccessToken(env: Env, force = false): Promise<string> {
   return next.access_token;
 }
 
-export async function tokenStatus(env: Env): Promise<{ connected: boolean; updatedAt?: string; error?: string }> {
+export async function tokenStatus(env: Env): Promise<{ connected: boolean; updatedAt?: string; error?: string; connector?: boolean }> {
+  if (env.FREEE_MCP) return { connected: true, connector: true };
   try {
     const row = await env.DB.prepare(`SELECT updated_at FROM oauth_tokens WHERE provider = 'freee'`).first<{ updated_at: string }>();
     return row ? { connected: true, updatedAt: row.updated_at } : { connected: false };

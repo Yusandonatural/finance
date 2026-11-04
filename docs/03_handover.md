@@ -11,7 +11,7 @@
 
 | 項目 | 状態 |
 |---|---|
-| フェーズ | 実装 v0.1 完了（MVP＋Phase 2 の大半）。本番デプロイ前。進捗の詳細は `02_project_plan.md` §1.5 |
+| フェーズ | 実装 v0.1 完了。claude.ai のアーティファクトとして稼働（§4.7）。Cloudflare 版のコードも残してある |
 | ブランチ | `claude/admiring-allen-fxcbys` |
 | 決定済み | ドメイン `finance.yusando.com`。棚卸補正は据置法（期首棚卸高＝月末棚卸高）を採用、比較年度にも同法を適用 |
 | 次にやること | 代表：README「初回セットアップ」（freee 自社アプリ登録 → Secrets → Access → デプロイ → 初回取込）。開発：実 freee での取込確認、税理士レビュー反映、Phase 2〜3 の残り |
@@ -68,6 +68,18 @@
 - 状況の判定：目安との差が 0 以上で「目安以上（費用は以内）」、差が目安の10%以内で「やや」、それ以上で「下回る／超過」。利益の行は前期が0円近くになりやすいので、前期比を率でなく差額で出す。
 - 同じ画面の下から今期の施策を追加できる（`/initiatives` に `return=targets` で POST）。「効く目標」は施策の関連科目として保存される。
 - まだ提出用ページには目標を載せていない（予算実績の比較表を加えるのが次の候補）。
+
+## 4.7 claude.ai 版（2026-11-05、現在の本番）
+
+- 依頼者の判断で、Cloudflare への公開はやめて claude.ai のアーティファクトとして動かす。アーティファクト「悠三堂 試算表」（claude.ai/artifact/RNc4Nv2DDjUdLvztDZwn8G、非公開）。
+- 仕組み：`src/client/main.ts` が Hono アプリ（`src/index.tsx`）をブラウザ内で `app.fetch` し、リンクとフォーム送信を横取りして画面を差し替える。サーバー版のルート・画面・計算はそのまま共用。
+- 保存先：`src/db.ts` の各関数は `env.DOCS` があると `src/store/docs.ts`（アーティファクトの db）へ処理を渡す。文書の配置は docs.ts の冒頭コメント。1文書 256KB まで（実測の最大は約 30KB）。
+- freee：`src/freee/client.ts` が `env.FREEE_MCP` のとき freee コネクタの `freee_api_get` を呼ぶ。コネクタのエラーは対処の文に変えて取込画面に出す。
+- 添付：アーティファクトの assets（PDF・画像・CSV のみ。Excel・Word は PDF にしてから）。
+- 提出用：`/print` の HTML に print.css を埋め込み、downloads でファイル保存。ブラウザで開いて印刷 → PDF（A4 9ページを確認済み）。
+- 確認画面：claude.ai では `confirm()` が使えないため、`data-confirm` 属性のフォームは独自の確認画面を出す（Workers 版は従来どおり `confirm()`）。
+- ないもの：毎月5日の自動取込（取込画面のボタンで行う）、Cloudflare Access（アーティファクトの共有設定がアクセス制御）。
+- テスト：`npm run check`（型チェック2種＋vitest）。claude.ai 版は、db・freee を模したスタブで取込→目標→施策→添付→削除→確定→提出ファイル保存→棚卸補正を通しで確認した（2026-11-05、13 手順すべて成功）。
 
 ## 5. 既知の課題・注意点
 

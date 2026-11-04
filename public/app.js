@@ -1,5 +1,7 @@
-// グラフのツールチップ（data-tip を持つ要素にマウスを乗せると表示）
+// 悠三堂 試算表：画面の補助スクリプト（Workers 版・claude.ai 版で共用）
 (() => {
+// グラフのツールチップ（data-tip を持つ要素にマウスを乗せると表示）
+function initGlobal() {
   const tip = document.createElement('div');
   tip.className = 'tooltip';
   tip.setAttribute('role', 'status');
@@ -33,13 +35,25 @@
     tip.classList.remove('on');
   });
 
-  // 期間選択は変更したらすぐ表示
-  document.querySelectorAll('select[data-autosubmit]').forEach((s) => s.addEventListener('change', () => s.form.submit()));
-})();
+  // 期間選択は変更したらすぐ表示（submit イベントを発火させる）
+  document.addEventListener('change', (e) => {
+    const s = e.target;
+    if (s && s.matches && s.matches('select[data-autosubmit]') && s.form) s.form.requestSubmit();
+  });
+
+  // 削除などの確認。claude.ai 版では src/client が独自の確認画面を出す
+  if (!window.__FINANCE_CLIENT__) {
+    document.addEventListener('submit', (e) => {
+      const f = e.target;
+      if (f && f.dataset && f.dataset.confirm && !window.confirm(f.dataset.confirm)) e.preventDefault();
+    }, true);
+  }
+}
+
 
 // 目標画面：入力に合わせて前期比と利益の目標をその場で計算する（保存時にサーバーでも計算）
-(() => {
-  const form = document.getElementById('targets-form');
+function initTargets(root) {
+  const form = root.querySelector('#targets-form');
   if (!form) return;
   const parse = (v) => { const n = Number(String(v).replace(/[,\s円]/g, '')); return v === '' || !Number.isFinite(n) ? null : Math.round(n); };
   const yen = (n) => (n === null ? '—' : (n < 0 ? '▲' : '') + Math.abs(n).toLocaleString('ja-JP'));
@@ -74,4 +88,16 @@
     }
     recalc();
   }));
+}
+
+function initPage(root = document) {
+  initTargets(root);
+}
+
+window.FinanceUI = { initGlobal, initPage };
+if (!window.__FINANCE_CLIENT__) {
+  initGlobal();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initPage());
+  else initPage();
+}
 })();
