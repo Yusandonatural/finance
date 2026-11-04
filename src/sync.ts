@@ -1,8 +1,21 @@
 import type { Env } from './env';
-import { fetchCompany, fetchReport, type ReportKind } from './freee/client';
+import { fetchCompany, fetchReport, isNoManufacturing, type ReportKind } from './freee/client';
 import type { FreeeReport } from './freee/types';
 import { audit, endMonthOf, hasSnapshot, saveSnapshot, setMeta, startMonthOf, upsertFiscalYears, type SnapshotKind } from './db';
 import { lastMonth, monthEndDate, monthsUpTo } from './lib/fiscal';
+
+/** 製造原価報告書がない期（製造業向け機能を使っていない期）の代わりに保存する空の報告 */
+const NO_CR: FreeeReport = { up_to_date: true, balances: [] };
+
+/** 試算表を取る。製造原価報告書を使っていない期は空の報告を返す（その期の取込は止めない） */
+async function fetchReportOrEmpty(env: Env, api: ReportKind, fy: number, s: number, e: number): Promise<FreeeReport> {
+  try {
+    return await fetchReport(env, api, fy, s, e);
+  } catch (err) {
+    if (api.startsWith('trial_cr') && isNoManufacturing(err)) return NO_CR;
+    throw err;
+  }
+}
 
 export interface SyncResult {
   fy: number;
@@ -61,7 +74,7 @@ export async function syncMonth(env: Env, fy: number, month: number, opts: { for
 
   const results = await inBatches(
     jobs.map((j) => async () => {
-      const rep: FreeeReport = await fetchReport(env, j.api, j.fy, j.s, j.e);
+      const rep: FreeeReport = await fetchReportOrEmpty(env, j.api, j.fy, j.s, j.e);
       await saveSnapshot(env, j.fy, j.kind, j.s, j.e, rep, fetchedAt);
       return rep.up_to_date;
     }),
@@ -103,7 +116,7 @@ export async function syncAllClosings(env: Env, opts: { force?: boolean; actor?:
         ['bs_fy', 'trial_bs'],
       ] as const) {
         if (!opts.force && (await hasSnapshot(env, f.fy, kind, s, e))) continue;
-        const rep = await fetchReport(env, api, f.fy, s, e);
+        const rep = await fetchReportOrEmpty(env, api, f.fy, s, e);
         result.calls++;
         await saveSnapshot(env, f.fy, kind, s, e, rep, fetchedAt);
         fetched++;

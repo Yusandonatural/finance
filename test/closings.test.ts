@@ -47,3 +47,16 @@ describe('過去5期の比較', () => {
     expect(fiveYearCompare(all, 10).cagrFrom).toBe(2019);
   });
 });
+
+import { freeeDetail, isNoManufacturing } from '../src/freee/client';
+
+describe('freee のエラー文', () => {
+  const raw = 'APIリクエストエラー: API request failed: 400 エラー詳細: 不正なリクエストです。 製造業向け機能を使用しない設定になっています。 ヒント: 不正なリクエストエラーが発生しました。 既存のデータを取得して正しい構造を確認することをお勧めします。';
+  it('要点だけを取り出す', () => {
+    expect(freeeDetail(raw)).toBe('製造業向け機能を使用しない設定になっています。');
+  });
+  it('製造原価報告書を使っていない期のエラーを見分ける', () => {
+    expect(isNoManufacturing(new Error(raw))).toBe(true);
+    expect(isNoManufacturing(new Error('API request failed: 401'))).toBe(false);
+  });
+});

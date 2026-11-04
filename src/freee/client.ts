@@ -13,6 +13,18 @@ export class FreeeError extends Error {
   }
 }
 
+/** freee のエラー文から要点だけを取り出す（「エラー詳細」の部分。決まり文句のヒントは省く） */
+export function freeeDetail(msg: string): string {
+  const m = msg.match(/エラー詳細[:：]\s*([\s\S]*?)(?:\s*ヒント[:：]|$)/);
+  const text = (m ? m[1] : msg).replace(/\s+/g, ' ').replace(/^不正なリクエストです。\s*/, '').trim();
+  return text.slice(0, 200) || msg.slice(0, 200);
+}
+
+/** 製造業向け機能（製造原価報告書）を使っていない期のエラーか */
+export function isNoManufacturing(e: unknown): boolean {
+  return /製造業向け機能を使用しない/.test(String((e as Error)?.message ?? e));
+}
+
 /** claude.ai 版：freee コネクタ（freee_api_get）経由で呼ぶ。エラーは対処がわかる文にして投げる */
 async function freeeViaConnector<T>(env: Env, path: string, query: Record<string, string | number>): Promise<T> {
   try {
@@ -32,7 +44,7 @@ async function freeeViaConnector<T>(env: Env, path: string, query: Record<string
       approval_required: 'freee の利用を許可してから、もう一度取り込んでください',
       blocked_by_policy: '組織の設定で、この画面から freee を使うことが止められています',
       server_unavailable: 'freee に一時的につながりません。少し待ってから取り込み直してください',
-      tool_error: `freee がエラーを返しました: ${msg.slice(0, 300)}`,
+      tool_error: `freee がエラーを返しました: ${freeeDetail(msg)}`,
     };
     throw new FreeeError(text[code ?? ''] ?? `freee の呼び出しに失敗しました（${code ?? 'unknown'}）: ${msg.slice(0, 200)}`, 502);
   }
