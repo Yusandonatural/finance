@@ -8,6 +8,7 @@ import { BridgeTable, BsTable, FiveYearTable, FlowTable, InventoryTable, Monthly
 import { FiveYearCharts } from './closings';
 import { PRODUCT_NOTE, ProductTrendTable } from './products';
 import type { ProductTrend } from '../report/products';
+import { parseNote, type NoteBlock } from '../report/note';
 import { fiveYearCompare } from '../report/closings';
 import { raw } from 'hono/html';
 import { groupedBars, waterfall } from './charts';
@@ -38,6 +39,75 @@ const PROFIT_KEYS = new Set(['gross', 'op', 'ord']);
 
 const STATUS = { planned: '予定', active: '実施中', done: '完了' } as const;
 
+/** 「目標の考え方」を文書として組む（独立したページ用） */
+const NoteDoc: FC<{ blocks: NoteBlock[] }> = ({ blocks }) => (
+  <div class="note-doc">
+    {blocks.map((b) => {
+      switch (b.type) {
+        case 'title':
+          return <p class="nd-title">{b.text}</p>;
+        case 'byline':
+          return <p class="nd-byline">{b.text}</p>;
+        case 'h':
+          return (
+            <h3 class="nd-h">
+              <span class="nd-no">{b.no}</span>
+              {b.text}
+            </h3>
+          );
+        case 'p':
+          return <p class="nd-p">{b.text}</p>;
+        case 'ul':
+          return (
+            <ul class="nd-ul">
+              {b.items.map((it) => (
+                <li>
+                  {it.label && <strong>{it.label}：</strong>}
+                  {it.text}
+                </li>
+              ))}
+            </ul>
+          );
+        case 'ol':
+          return (
+            <ol class="nd-ol">
+              {b.items.map((it) => (
+                <li>
+                  <span class="nd-oln">{it.no}</span>
+                  <div>
+                    {it.label && <strong class="nd-ol-label">{it.label}</strong>}
+                    {it.text}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          );
+        case 'table':
+          return (
+            <table class="nd-table">
+              <thead>
+                <tr>
+                  {b.head.map((h) => (
+                    <th>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {b.rows.map((r) => (
+                  <tr>
+                    {r.map((c, i) => (
+                      <td class={i === 1 && /\d/.test(c) ? 'num' : ''}>{c}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+      }
+    })}
+  </div>
+);
+
 const Page: FC<{ title: string; no: number; cls?: string; children?: unknown }> = ({ title, no, cls, children }) => (
   <section class={`sheet ${cls ?? ''}`}>
     <h2>
@@ -64,7 +134,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const tg = data.targets ?? null;
   const five = fiveYearCompare(r.pastFy, data.compareYears ?? 5);
   const closingDocs = data.closingDocs ?? [];
-  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算', ...(data.products ? ['売れ筋商品の推移'] : [])];
+  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), ...(tg?.note ? ['目標の考え方'] : []), '当期の施策と添付資料', '過去の決算', ...(data.products ? ['売れ筋商品の推移'] : [])];
   const asOf = `〜${m.month}月`;
   const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
   const col = (key: string, c: number) => (ser(key)?.values ?? []).map((v) => (v ? v[c] : null));
@@ -313,12 +383,12 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
                 ))}
               </tbody>
             </table>
-            {tg.note && (
-              <>
-                <h3>目標の考え方</h3>
-                <p class="note-text">{tg.note}</p>
-              </>
-            )}
+            {tg.note && <p class="sub">目標の考え方は次のページに載せています。</p>}
+          </Page>
+        )}
+        {tg?.note && (
+          <Page title="目標の考え方" no={++no} cls="note-page">
+            <NoteDoc blocks={parseNote(tg.note)} />
           </Page>
         )}
         <Page title="当期の施策と添付資料" no={++no}>
