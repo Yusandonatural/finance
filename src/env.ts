@@ -5,6 +5,8 @@ export interface Env {
   DOCS?: any;
   /** claude.ai 版：アーティファクトの mcp（freee コネクタ呼び出し） */
   FREEE_MCP?: any;
+  /** claude.ai 版：アーティファクトの mcp（Shopify コネクタ呼び出し） */
+  SHOPIFY_MCP?: any;
   /** claude.ai 版：アーティファクトの assets（添付ファイル） */
   ASSETS_STORE?: any;
   /** claude.ai 版で動いているとき '1'（Cloudflare Access の検証を省く） */

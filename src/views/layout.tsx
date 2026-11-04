@@ -10,6 +10,7 @@ const ICONS: Record<string, string> = {
   adjust: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/>',
   initiatives: '<path d="M12 3c-4 4-6 8-6 11a6 6 0 0 0 12 0c0-3-2-7-6-11z"/><path d="M12 21v-8"/>',
   loans: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+  products: '<path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/>',
   history: '<path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/>',
 };
 export const Icon: FC<{ name: string }> = ({ name }) => (
@@ -22,6 +23,7 @@ const NAV = [
   ['/report', '試算表', 'report'],
   ['/targets', '今期の目標', 'targets'],
   ['/closings', '過去の決算', 'closings'],
+  ['/products', '売れ筋商品', 'products'],
   ['/adjust', '棚卸補正', 'adjust'],
   ['/initiatives', '施策・添付', 'initiatives'],
   ['/loans', '借入金', 'loans'],

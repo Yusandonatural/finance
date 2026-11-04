@@ -385,3 +385,17 @@ ul.log .muted { word-break: break-all; }
   .head-actions .period, .head-actions select { width: 100%; }
   ul.log li { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* 売れ筋商品 */
+.seg-row { display: flex; flex-wrap: wrap; gap: 4px 22px; align-items: center; margin: 0 0 16px; }
+.seg-row .segmented { margin: 0; }
+.kpi-val.kpi-text { font-size: 17px; white-space: normal; line-height: 1.4; }
+table.fin.products td.name { max-width: 330px; overflow: hidden; text-overflow: ellipsis; padding-left: 8px; }
+table.fin.products th.rank, table.fin.products td.rank { width: 34px; text-align: right; color: var(--muted); padding-right: 4px; }
+table.fin.products th.basis { color: var(--accent-strong); }
+table.fin.products td.basis { background: var(--accent-soft); }
+table.fin.products tr.sub-total td { color: var(--ink-2); border-top: 1px solid var(--line-2); }
+table.fin.products tr.sub-total + tr.sub-total td { border-top: 0; }
+table.fin.products td.spark-col { padding: 2px 16px 2px 8px; }
+table.fin.products th.spark-col { text-align: center; }
+p.note { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }

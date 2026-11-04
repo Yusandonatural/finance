@@ -35,6 +35,7 @@ import {
   startMonthOf,
   updatePackageSubmission,
   upsertFiscalYears,
+  listProductYears,
   type Initiative,
 } from './db';
 import { authorizeUrl, exchangeCode, saveToken, tokenStatus } from './freee/oauth';
@@ -49,6 +50,9 @@ import { PrintView, type PackageData } from './views/print';
 import { TargetsPage } from './views/targets';
 import { ClosingsPage } from './views/closings';
 import { normalizeYears } from './report/closings';
+import { normalizeMetric, normalizeTop, productTrend } from './report/products';
+import { ProductsPage } from './views/products';
+import { syncProducts } from './shopify/sync';
 import { buildTargetView, targetKeys } from './report/targets';
 import * as demo from './demo/fixtures';
 
@@ -141,8 +145,10 @@ async function packageData(env: Env, fy: number, month: number): Promise<Package
   // 目標は、この試算表と同じ月までの実績で進み具合を出す
   const hasTargets = Object.keys(saved.values).length > 0 || !!saved.note;
   const targets = hasTargets ? { rows: buildTargetView(fy, priorPl, report, saved.values).rows, note: saved.note } : null;
-  const [closingDocs, years] = await Promise.all([listClosingAttachments(env), getMeta(env, 'compare_years')]);
-  return { report, initiatives, attachments, loans, targets, closingDocs, compareYears: normalizeYears(years) };
+  const [closingDocs, years, productYears] = await Promise.all([listClosingAttachments(env), getMeta(env, 'compare_years'), listProductYears(env)]);
+  // 売れ筋商品は、提出用では上位10商品の売上で載せる（今期の途中の列は含めない）
+  const products = productYears.length ? productTrend(productYears.filter((y) => y.complete), normalizeYears(years), 10, 'sales') : null;
+  return { report, initiatives, attachments, loans, targets, closingDocs, compareYears: normalizeYears(years), products: products?.rows.length ? products : null };
 }
 
 // ---------- pages ----------
@@ -485,6 +491,44 @@ app.post('/closings/sync', async (c) => {
     flash(c, (e as Error).message, 'error');
   }
   return c.redirect('/closings');
+});
+
+// ---------- 売れ筋商品（Shopify） ----------
+app.get('/products', async (c) => {
+  const [years, n, top, metric] = await Promise.all([listProductYears(c.env), getMeta(c.env, 'compare_years'), getMeta(c.env, 'products_top'), getMeta(c.env, 'products_metric')]);
+  const view = { n: normalizeYears(n), top: normalizeTop(top), metric: normalizeMetric(metric) };
+  return c.html(
+    <Layout title="売れ筋商品" active="/products" actor={c.get('actor')} {...takeFlash(c)}>
+      <ProductsPage years={years} trend={productTrend(years, view.n, view.top, view.metric)} connected={!!c.env.SHOPIFY_MCP} n={view.n} top={view.top} />
+    </Layout>,
+  );
+});
+
+app.post('/products/view', async (c) => {
+  const b = await readBody(c);
+  if (b.n !== undefined) await setMeta(c.env, 'compare_years', String(normalizeYears(b.n)));
+  if (b.top !== undefined) await setMeta(c.env, 'products_top', String(normalizeTop(b.top)));
+  if (b.metric !== undefined) await setMeta(c.env, 'products_metric', normalizeMetric(b.metric));
+  return c.redirect('/products');
+});
+
+app.post('/products/sync', async (c) => {
+  let b: Record<string, string | File> = {};
+  try {
+    b = await readBody(c);
+  } catch {
+    // 「取り直す」の印が読めなくても、通常の取込として進める
+  }
+  try {
+    const r = await syncProducts(c.env, { force: b.force === '1', actor: c.get('actor') });
+    const parts = [`${r.years.length}年度分を取り込みました`];
+    if (r.skipped) parts.push(`取込済みの ${r.skipped}年度は飛ばしました`);
+    if (r.failed.length) parts.push(`取り込めなかった年度：${r.failed.map((f) => `${f.fy}年度（${f.message}）`).join('、')}`);
+    flash(c, parts.join('。'), r.failed.length && !r.years.length ? 'error' : 'ok');
+  } catch (e) {
+    flash(c, (e as Error).message, 'error');
+  }
+  return c.redirect('/products');
 });
 
 // ---------- targets ----------

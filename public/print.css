@@ -113,3 +113,8 @@ table.kv td { padding: 1mm 0; white-space: pre-wrap; border-top: 0.4pt solid var
   .sheet.landscape { width: auto; min-height: 0; }
   .cover { height: 265mm; }
 }
+
+/* 売れ筋商品 */
+table.fin.products td.name { white-space: normal; max-width: 62mm; }
+table.fin.products td.rank, table.fin.products th.rank { width: 8mm; white-space: nowrap; text-align: right; color: var(--ink-2); }
+table.fin.products tr.sub-total td { color: var(--ink-2); }

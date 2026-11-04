@@ -6,6 +6,7 @@ import { lastMonth, monthsUpTo } from './lib/fiscal';
 import * as docs from './store/docs';
 import { closingSummary } from './report/closings';
 import type { PastFy } from './report/types';
+import type { ProductYear } from './report/products';
 
 export type SnapshotKind = 'pl3' | 'cr3' | 'bs3' | 'pl_fy' | 'cr_fy' | 'bs_fy';
 
@@ -274,6 +275,18 @@ export async function listAttachments(env: Env, fy: number): Promise<Attachment[
   if (env.DOCS) return (docs.listAttachments as (...a: unknown[]) => any)(...arguments);
   const r = await env.DB.prepare("SELECT * FROM attachments WHERE fy = ? AND (category IS NULL OR category != 'closing') ORDER BY initiative_id IS NOT NULL, initiative_id, id").bind(fy).all<Attachment>();
   return r.results;
+}
+
+// ---------- 売れ筋商品（Shopify） ----------
+// D1 版では app_meta に年度ごとの JSON として置く（Shopify の取込は claude.ai 版だけ）
+export async function saveProductYear(env: Env, y: ProductYear): Promise<void> {
+  if (env.DOCS) return (docs.saveProductYear as (...a: unknown[]) => any)(...arguments);
+  await setMeta(env, `products:${y.fy}`, JSON.stringify(y));
+}
+export async function listProductYears(env: Env): Promise<ProductYear[]> {
+  if (env.DOCS) return (docs.listProductYears as (...a: unknown[]) => any)(...arguments);
+  const r = await env.DB.prepare("SELECT value FROM app_meta WHERE key LIKE 'products:%'").all<{ value: string }>();
+  return r.results.map((x) => JSON.parse(x.value) as ProductYear).sort((a, b) => a.fy - b.fy);
 }
 
 /** 過去の決算書（全年度） */

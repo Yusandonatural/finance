@@ -10,6 +10,8 @@
  *   adjustments/<fy>-<month>      棚卸補正の設定と実地簡易棚卸の入力
  *   initiatives/<id>  attachments/<id>  loans/<id>  packages/<id>
  *   targets/<fy>                  今期の目標
+ *   closings/<fy>                 過去の決算の要約
+ *   products/<fy>                 Shopify の商品別売上（年度ごと）
  * 1文書は 256 KiB まで、全体で 25,000 文書まで。
  */
 import type { Env } from '../env';
@@ -18,6 +20,7 @@ import type { Bundle, Settings } from '../report/assemble';
 import type { InvCat, Method } from '../report/types';
 import { closingSummary } from '../report/closings';
 import type { PastFy } from '../report/types';
+import type { ProductYear } from '../report/products';
 import { assembleBundle, endMonthOf, startMonthOf, type Attachment, type Initiative, type InventoryInput, type Loan, type PackageRow, type SnapshotKind, type SnapshotRow } from '../db';
 
 type Doc = Record<string, any>;
@@ -234,6 +237,14 @@ export async function updatePackageSubmission(env: Env, id: number, to: string |
   const p = await getPackage(env, id);
   if (!p) return;
   await write(env, `packages/${id}`, { ...p, submitted_to: to, submitted_on: on, memo });
+}
+
+// ---------- 売れ筋商品（Shopify） ----------
+export async function saveProductYear(env: Env, y: ProductYear): Promise<void> {
+  await write(env, `products/${y.fy}`, y as unknown as Doc);
+}
+export async function listProductYears(env: Env): Promise<ProductYear[]> {
+  return ((await list(env, 'products')) as ProductYear[]).sort((a, b) => a.fy - b.fy);
 }
 
 // ---------- audit ----------

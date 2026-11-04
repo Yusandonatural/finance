@@ -111,6 +111,17 @@
 - `src/sync.ts` の `fetchReportOrEmpty` が、このエラーのときだけ空の製造原価報告書（`balances: []`）を保存して取込を続ける。損益計算書・貸借対照表はふだんどおり取る。ほかのエラーはそのまま失敗として扱う。
 - freee のエラー文は `freeeDetail` で「エラー詳細」の部分だけを表示する（決まり文句のヒントは省く）。
 
+## 4.12 売れ筋商品（Shopify、2026-11-05）
+
+- 画面 `/products`。Shopify コネクタの `run-analytics-query`（ShopifyQL）で、会計年度（3月〜2月）ごとに商品別の純売上と販売数を取る。
+  - 問い合わせ：`FROM sales SHOW net_sales, quantity_ordered GROUP BY product_title SINCE <期首> UNTIL <期末 or 今日> ORDER BY net_sales DESC LIMIT 1000`
+  - 保存先：claude.ai 版は `products/<fy>`、D1 版は `app_meta` の `products:<fy>`（Workers 版には Shopify の接続がないので、取込は claude.ai 版だけ）。
+  - 終わった年度は一度だけ取り込み（「取り直す」で再取得）、今期は毎回取り直す。
+- 順位は直近の終わった年度で決める。上位 5/10/20 商品、売上／販売数、3/5/10 期を切り替えられる。期数は「過去の決算」と共通（`compare_years`）。
+- 商品名が空の行は「商品登録のない売上」としてまとめる。2026年度は主に下書き注文（Draft Orders）の手入力の商品。
+- 提出用資料には、終わった年度だけで上位10商品の売上を載せる（取り込んでいなければ載せない）。
+- 注意：Shopify の純売上は税抜で、送料・税を含まない（freee の売上高とは一致しない）。商品名は現在の名前で集計される（例：「悠三堂の福袋2026」が2024年度にも出る）。
+
 ## 5. 既知の課題・注意点
 
 - **yusando.com の DNS は Route 53**（2026-11-05、`wrangler deploy` が「Could not find zone for finance.yusando.com」で確定）。そのため workers.dev で公開する設定に変更済み。`APP_ORIGIN` は空にしてあり、freee のコールバック URL はアクセスされたアドレスから組み立てる。

@@ -6,6 +6,8 @@ import { adjusted, findTotal } from '../report/lines';
 import type { Report } from '../report/types';
 import { BridgeTable, BsTable, FiveYearTable, FlowTable, InventoryTable, MonthlyTable, PastFyList, SensitivityTable, Yen } from './components';
 import { FiveYearCharts } from './closings';
+import { PRODUCT_NOTE, ProductTrendTable } from './products';
+import type { ProductTrend } from '../report/products';
 import { fiveYearCompare } from '../report/closings';
 import { raw } from 'hono/html';
 import { groupedBars, waterfall } from './charts';
@@ -24,6 +26,8 @@ export interface PackageData {
   closingDocs?: Attachment[];
   /** 過去の推移で比べる期数（3・5・10） */
   compareYears?: number;
+  /** 売れ筋商品の推移（Shopify、上位10商品）。取り込んでいなければ null */
+  products?: ProductTrend | null;
 }
 
 const TARGET_STATUS = {
@@ -60,7 +64,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const tg = data.targets ?? null;
   const five = fiveYearCompare(r.pastFy, data.compareYears ?? 5);
   const closingDocs = data.closingDocs ?? [];
-  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算'];
+  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算', ...(data.products ? ['売れ筋商品の推移'] : [])];
   const asOf = `〜${m.month}月`;
   const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
   const col = (key: string, c: number) => (ser(key)?.values ?? []).map((v) => (v ? v[c] : null));
@@ -414,6 +418,17 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
             </>
           )}
         </Page>
+        {data.products && (
+          <Page title="売れ筋商品の推移" no={++no}>
+            <p class="sub">
+              単位：円　Shopify の商品別売上（会計年度 3月〜2月）。順位は{data.products.basisFy}年度の売上の順、数字の下の小さな値は前年比
+            </p>
+            <div class={data.products.cols.length > 5 ? 'five-wide' : ''}>
+              <ProductTrendTable t={data.products} spark={false} />
+            </div>
+            <p class="sub">{PRODUCT_NOTE}</p>
+          </Page>
+        )}
       </body>
     </html>
   );

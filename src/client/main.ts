@@ -435,6 +435,7 @@ async function start() {
   env = {
     DOCS: db,
     FREEE_MCP: mcp ?? undefined,
+    SHOPIFY_MCP: mcp ?? undefined,
     ASSETS_STORE: assets ?? undefined,
     FILES: files,
     FLASH: { ok: null, error: null },
