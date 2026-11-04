@@ -304,6 +304,11 @@ ul.init-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .card-figure { margin: 0; }
 .card-figure figcaption { font-size: 13px; font-weight: 700; color: var(--ink-2); margin-bottom: 6px; }
 table.fin.five td .yoy { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.segmented { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+.segmented-label { font-size: 12.5px; color: var(--ink-2); font-weight: 500; margin-right: 4px; }
+.segmented button { font: inherit; font-size: 13px; font-weight: 500; height: 34px; padding: 0 14px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); border-radius: 999px; cursor: pointer; }
+.segmented button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.segmented .muted { margin-left: 6px; }
 .closing-doc { padding: 12px 0; border-top: 1px solid var(--line); }
 .closing-doc:first-of-type { border-top: 0; }
 .closing-doc-head { display: flex; align-items: center; gap: 8px; }

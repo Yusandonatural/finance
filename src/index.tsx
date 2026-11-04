@@ -10,6 +10,7 @@ import {
   listClosings,
   listClosingAttachments,
   getFyPl,
+  getMeta,
   getTargets,
   saveTargets,
   getAttachment,
@@ -47,6 +48,7 @@ import { AdjustPage, EmptyPage, HistoryPage, InitiativesPage, LoansPage, ReportP
 import { PrintView, type PackageData } from './views/print';
 import { TargetsPage } from './views/targets';
 import { ClosingsPage } from './views/closings';
+import { normalizeYears } from './report/closings';
 import { buildTargetView, targetKeys } from './report/targets';
 import * as demo from './demo/fixtures';
 
@@ -130,8 +132,8 @@ async function packageData(env: Env, fy: number, month: number): Promise<Package
   // 目標は、この試算表と同じ月までの実績で進み具合を出す
   const hasTargets = Object.keys(saved.values).length > 0 || !!saved.note;
   const targets = hasTargets ? { rows: buildTargetView(fy, priorPl, report, saved.values).rows, note: saved.note } : null;
-  const closingDocs = await listClosingAttachments(env);
-  return { report, initiatives, attachments, loans, targets, closingDocs };
+  const [closingDocs, years] = await Promise.all([listClosingAttachments(env), getMeta(env, 'compare_years')]);
+  return { report, initiatives, attachments, loans, targets, closingDocs, compareYears: normalizeYears(years) };
 }
 
 // ---------- pages ----------
@@ -443,12 +445,18 @@ app.post('/loans/:id/delete', async (c) => {
 
 // ---------- past closings ----------
 app.get('/closings', async (c) => {
-  const [closings, docsList, fys, status] = await Promise.all([listClosings(c.env), listClosingAttachments(c.env), listFiscalYears(c.env), tokenStatus(c.env)]);
+  const [closings, docsList, fys, status, years] = await Promise.all([listClosings(c.env), listClosingAttachments(c.env), listFiscalYears(c.env), tokenStatus(c.env), getMeta(c.env, 'compare_years')]);
   return c.html(
     <Layout title="過去の決算" active="/closings" actor={c.get('actor')} {...takeFlash(c)}>
-      <ClosingsPage closings={closings} docs={docsList} fys={fys} connected={status.connected} />
+      <ClosingsPage closings={closings} docs={docsList} fys={fys} connected={status.connected} n={normalizeYears(years)} />
     </Layout>,
   );
+});
+
+app.post('/closings/years', async (c) => {
+  const b = await c.req.parseBody();
+  await setMeta(c.env, 'compare_years', String(normalizeYears(b.n)));
+  return c.redirect('/closings');
 });
 
 app.post('/closings/sync', async (c) => {

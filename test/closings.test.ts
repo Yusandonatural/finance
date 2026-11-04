@@ -35,9 +35,15 @@ describe('過去5期の比較', () => {
     const rate = f.rows.find((r) => r.key === 'grossRate')!;
     expect(rate.values[0]).toBeCloseTo(50, 6);
   });
-  it('12ヶ月未満の期が入るときは年平均伸び率を出さない', () => {
+  it('12ヶ月未満の期は、年平均伸び率の計算から外す', () => {
     const f = fiveYearCompare([mk(2016, 1e6, 0, 5), mk(2017, 5e6, 0), mk(2018, 8e6, 0)]);
     expect(f.years.length).toBe(3);
-    expect(f.salesCagr).toBeNull();
+    expect(f.cagrFrom).toBe(2017);
+    expect(f.salesCagr).toBeCloseTo((8e6 / 5e6 - 1) * 100, 6);
+  });
+  it('期数を切り替えられる（3・5・10）', () => {
+    expect(fiveYearCompare(all, 3).years.map((y) => y.fy)).toEqual([2023, 2024, 2025]);
+    expect(fiveYearCompare(all, 10).years.map((y) => y.fy)).toEqual([2016, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+    expect(fiveYearCompare(all, 10).cagrFrom).toBe(2019);
   });
 });

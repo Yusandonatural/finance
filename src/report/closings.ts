@@ -66,8 +66,18 @@ export interface CompareRow {
 export interface FiveYear {
   years: PastFy[];
   rows: CompareRow[];
-  /** 最初の期から最後の期までの年平均伸び率（売上高）。12ヶ月未満の期が入る場合は出さない */
+  /** 年平均伸び率（売上高）。12ヶ月そろった期だけで計算する（設立初年度などの短い期は除く） */
   salesCagr: number | null;
+  /** 伸び率の計算に使った最初と最後の年度 */
+  cagrFrom: number | null;
+  cagrTo: number | null;
+}
+
+/** 選べる比較の期数 */
+export const COMPARE_CHOICES = [3, 5, 10] as const;
+export function normalizeYears(v: unknown): number {
+  const n = Number(v);
+  return (COMPARE_CHOICES as readonly number[]).includes(n) ? n : 5;
 }
 
 /** 直近 n 期（古い順）の比較表 */
@@ -91,9 +101,10 @@ export function fiveYearCompare(closings: PastFy[], n = 5): FiveYear {
     { key: 'borrowings', name: '借入金', level: 1, values: col((p) => p.borrowings) },
     { key: 'officer', name: '役員借入金', level: 1, values: col((p) => p.officerLoans) },
   ];
-  const first = years[0];
-  const last = years[years.length - 1];
-  const fullYears = years.every((y) => (y.months ?? 12) >= 12);
-  const salesCagr = years.length >= 2 && fullYears && first.sales && last.sales && first.sales > 0 && last.sales > 0 ? (Math.pow(last.sales / first.sales, 1 / (years.length - 1)) - 1) * 100 : null;
-  return { years, rows, salesCagr };
+  const full = years.filter((y) => (y.months ?? 12) >= 12 && (y.sales ?? 0) > 0);
+  const first = full[0];
+  const last = full[full.length - 1];
+  const span = first && last ? last.fy - first.fy : 0;
+  const salesCagr = span >= 1 ? (Math.pow((last.sales as number) / (first.sales as number), 1 / span) - 1) * 100 : null;
+  return { years, rows, salesCagr, cagrFrom: span >= 1 ? first.fy : null, cagrTo: span >= 1 ? last.fy : null };
 }

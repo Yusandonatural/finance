@@ -69,6 +69,9 @@ table.fin.monthly tr.first td { border-top: 0.5pt solid var(--line); }
 table.fin td.note { white-space: normal; }
 table.fin.five td .yoy { display: block; font-size: 6.4pt; color: var(--ink-2); font-weight: 400; }
 .card-figure { margin: 0; }
+.five-wide table.fin { font-size: 6.4pt; }
+.five-wide table.fin th, .five-wide table.fin td { padding-left: 0.8mm; padding-right: 0.8mm; }
+.five-wide table.fin td .yoy { font-size: 5.6pt; }
 .docs-list { padding-left: 5mm; margin: 0; font-size: 8.6pt; }
 
 /* charts */

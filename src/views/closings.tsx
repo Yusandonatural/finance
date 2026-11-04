@@ -3,16 +3,17 @@ import { raw } from 'hono/html';
 import type { Attachment } from '../db';
 import type { FreeeFiscalYear } from '../freee/types';
 import { pct, yen } from '../lib/format';
-import { fiveYearCompare, periodLabel } from '../report/closings';
+import { COMPARE_CHOICES, fiveYearCompare, periodLabel } from '../report/closings';
 import type { PastFy } from '../report/types';
 import { groupedBars } from './charts';
 import { FiveYearTable, PastFyList } from './components';
 
 /** 過去5期の売上高・経常利益のグラフ（画面と提出用で共用） */
-export const FiveYearCharts: FC<{ closings: PastFy[]; height?: number }> = ({ closings, height }) => {
-  const f = fiveYearCompare(closings);
+export const FiveYearCharts: FC<{ closings: PastFy[]; height?: number; n?: number }> = ({ closings, height, n = 5 }) => {
+  const f = fiveYearCompare(closings, n);
   if (f.years.length < 2) return null;
-  const cats = f.years.map((y) => `${y.fy}年度`);
+  // 期が多いときは軸の文字を短くする（2016年度 → 16年度）
+  const cats = f.years.map((y) => (f.years.length > 5 ? `${String(y.fy).slice(2)}年度` : `${y.fy}年度`));
   const last = cats.length - 1;
   return (
     <div class="chart-row">
@@ -28,8 +29,9 @@ export const FiveYearCharts: FC<{ closings: PastFy[]; height?: number }> = ({ cl
   );
 };
 
-export const ClosingsPage: FC<{ closings: PastFy[]; docs: Attachment[]; fys: FreeeFiscalYear[]; connected: boolean }> = ({ closings, docs, fys, connected }) => {
-  const f = fiveYearCompare(closings);
+export const ClosingsPage: FC<{ closings: PastFy[]; docs: Attachment[]; fys: FreeeFiscalYear[]; connected: boolean; n: number }> = ({ closings, docs, fys, connected, n }) => {
+  const f = fiveYearCompare(closings, n);
+  const available = closings.filter((c) => c.sales !== null).length;
   const latest = f.years[f.years.length - 1];
   const oldest = f.years[0];
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -67,6 +69,18 @@ export const ClosingsPage: FC<{ closings: PastFy[]; docs: Attachment[]; fys: Fre
         </form>
       </section>
 
+      {available >= 2 && (
+        <form method="post" action="/closings/years" class="segmented" aria-label="比べる期数">
+          <span class="segmented-label">比べる期数</span>
+          {COMPARE_CHOICES.map((c) => (
+            <button type="submit" name="n" value={String(c)} class={c === n ? 'on' : ''} aria-pressed={c === n ? 'true' : 'false'}>
+              {c}期{c > available ? `（取込済み${available}期）` : ''}
+            </button>
+          ))}
+          <span class="muted">提出用資料の推移グラフと比較表も、この期数になります</span>
+        </form>
+      )}
+
       {f.years.length >= 2 && (
         <>
           <section class="kpis" aria-label="過去の推移の要約">
@@ -95,7 +109,7 @@ export const ClosingsPage: FC<{ closings: PastFy[]; docs: Attachment[]; fys: Fre
               </div>
               <div class="kpi-foot">
                 <span class="kpi-sub">
-                  {oldest.fy}〜{latest.fy}年度（{f.years.length}期）{f.salesCagr === null ? '・12ヶ月未満の期を含むため出していません' : ''}
+                  {f.cagrFrom !== null ? `${f.cagrFrom}〜${f.cagrTo}年度で計算${f.cagrFrom !== oldest.fy ? '（12ヶ月に満たない期は除く）' : ''}` : '12ヶ月そろった期が2期以上あると出ます'}
                 </span>
               </div>
             </div>
@@ -120,7 +134,7 @@ export const ClosingsPage: FC<{ closings: PastFy[]; docs: Attachment[]; fys: Fre
                 <p class="card-sub">棒にマウスを乗せると金額が出ます</p>
               </div>
             </div>
-            <FiveYearCharts closings={closings} />
+            <FiveYearCharts closings={closings} n={n} />
           </section>
 
           <section class="card flush">

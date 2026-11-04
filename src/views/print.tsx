@@ -22,6 +22,8 @@ export interface PackageData {
   targets?: { rows: TargetRow[]; note: string | null } | null;
   /** 登録された過去の決算書（別添の資料として名前を載せる） */
   closingDocs?: Attachment[];
+  /** 過去の推移で比べる期数（3・5・10） */
+  compareYears?: number;
 }
 
 const TARGET_STATUS = {
@@ -56,7 +58,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const dateStr = new Date(createdAt ?? r.meta.generatedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' });
   let no = 0;
   const tg = data.targets ?? null;
-  const five = fiveYearCompare(r.pastFy);
+  const five = fiveYearCompare(r.pastFy, data.compareYears ?? 5);
   const closingDocs = data.closingDocs ?? [];
   const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算'];
   const asOf = `〜${m.month}月`;
@@ -389,9 +391,11 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           {five.years.length >= 2 && (
             <>
               <h3>過去{five.years.length}期の推移</h3>
-              <FiveYearCharts closings={r.pastFy} height={170} />
-              <FiveYearTable f={five} />
-              <p class="sub">金額の下の小さな数字は前年比。{five.salesCagr !== null ? `売上高の年平均伸び率 ${five.salesCagr >= 0 ? '+' : '▲'}${Math.abs(five.salesCagr).toFixed(1)}%。` : ''}</p>
+              <FiveYearCharts closings={r.pastFy} height={170} n={data.compareYears ?? 5} />
+              <div class={five.years.length > 5 ? 'five-wide' : ''}>
+                <FiveYearTable f={five} />
+              </div>
+              <p class="sub">金額の下の小さな数字は前年比。{five.salesCagr !== null ? `売上高の年平均伸び率 ${five.salesCagr >= 0 ? '+' : '▲'}${Math.abs(five.salesCagr).toFixed(1)}%（${five.cagrFrom}〜${five.cagrTo}年度）。` : ''}</p>
             </>
           )}
           <h3>全期の決算</h3>

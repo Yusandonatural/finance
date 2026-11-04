@@ -255,7 +255,7 @@ export const FiveYearTable: FC<{ f: FiveYear }> = ({ f }) => (
               return (
                 <td class={`num${v !== null && v < 0 && !row.percent ? ' neg' : ''}`}>
                   {row.percent ? (v === null ? '—' : `${v.toFixed(1)}%`) : yen(v)}
-                  {row.yoy && i > 0 && v !== null && prev !== null && <span class="yoy">{pct(v, prev)}</span>}
+                  {row.yoy && i > 0 && v !== null && prev !== null && (f.years[i - 1].months ?? 12) >= 12 && <span class="yoy">{pct(v, prev)}</span>}
                 </td>
               );
             })}
