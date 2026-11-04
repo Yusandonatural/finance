@@ -116,8 +116,18 @@ async function reportFor(env: Env, fy: number, month: number) {
 }
 
 async function packageData(env: Env, fy: number, month: number): Promise<PackageData> {
-  const [{ report }, initiatives, attachments, loans] = await Promise.all([reportFor(env, fy, month), listInitiatives(env, fy), listAttachments(env, fy), listLoans(env)]);
-  return { report, initiatives, attachments, loans };
+  const [{ report }, initiatives, attachments, loans, priorPl, saved] = await Promise.all([
+    reportFor(env, fy, month),
+    listInitiatives(env, fy),
+    listAttachments(env, fy),
+    listLoans(env),
+    getFyPl(env, fy - 1),
+    getTargets(env, fy),
+  ]);
+  // 目標は、この試算表と同じ月までの実績で進み具合を出す
+  const hasTargets = Object.keys(saved.values).length > 0 || !!saved.note;
+  const targets = hasTargets ? { rows: buildTargetView(fy, priorPl, report, saved.values).rows, note: saved.note } : null;
+  return { report, initiatives, attachments, loans, targets };
 }
 
 // ---------- pages ----------
@@ -520,8 +530,13 @@ app.post('/dev/seed', async (c) => {
   return c.redirect('/report?fy=2026&month=8');
 });
 
-app.onError((err, c) => {
+app.onError(async (err, c) => {
   console.error(err);
+  try {
+    await audit(c.env, c.get('actor') ?? null, 'error', { path: new URL(c.req.url).pathname, method: c.req.method, message: String(err.message).slice(0, 300) });
+  } catch {
+    /* 記録できなくてもエラー画面は出す */
+  }
   return c.html(
     <Layout title="エラー" actor={c.get('actor')}>
       <h1>エラーが発生しました</h1>

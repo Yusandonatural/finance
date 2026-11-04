@@ -32,6 +32,8 @@ body.client-busy main { opacity: .55; pointer-events: none; transition: opacity 
 .client-fatal, .client-loading { max-width: 560px; margin: 12vh auto 0; padding-inline: 16px; text-align: center; color: var(--ink-2); }
 .client-fatal h1 { font-size: 20px; color: var(--ink); }
 .client-loading .mark { margin: 0 auto 14px; }
+.unsaved-note { margin-left: 10px; color: var(--warn); font-size: 12.5px; font-weight: 700; align-self: center; }
+form.is-dirty button.btn.primary { box-shadow: 0 0 0 3px var(--warn-soft); }
 `;
 
 const fonts = '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@600&display=swap">';

@@ -8,13 +8,23 @@ import { BridgeTable, BsTable, FlowTable, InventoryTable, MonthlyTable, PastFyTa
 import { raw } from 'hono/html';
 import { groupedBars, waterfall } from './charts';
 import { fyLabel } from '../lib/fiscal';
+import { pct, signedYen } from '../lib/format';
+import type { TargetRow } from '../report/targets';
 
 export interface PackageData {
   report: Report;
   initiatives: Initiative[];
   attachments: Attachment[];
   loans: Loan[];
+  /** 今期の目標と考え方。目標も考え方も未設定なら null（提出用ページに載せない） */
+  targets?: { rows: TargetRow[]; note: string | null } | null;
 }
+
+const TARGET_STATUS = {
+  higher: { ok: '目安以上', warn: 'やや下回る', bad: '下回る' },
+  lower: { ok: '目安以内', warn: 'やや超過', bad: '超過' },
+} as const;
+const PROFIT_KEYS = new Set(['gross', 'op', 'ord']);
 
 const STATUS = { planned: '予定', active: '実施中', done: '完了' } as const;
 
@@ -41,6 +51,9 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const commonAtt = data.attachments.filter((a) => a.initiative_id === null);
   const dateStr = new Date(createdAt ?? r.meta.generatedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' });
   let no = 0;
+  const tg = data.targets ?? null;
+  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算'];
+  const asOf = `〜${m.month}月`;
   const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
   const col = (key: string, c: number) => (ser(key)?.values ?? []).map((v) => (v ? v[c] : null));
   const cats = r.monthly.months.map((x) => x.label);
@@ -95,14 +108,9 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
             <div>
               <h3>目次</h3>
               <ol class="toc">
-                <li>損益計算書（累計・3期比較）</li>
-                <li>製造原価報告書（累計・3期比較）</li>
-                <li>貸借対照表</li>
-                <li>月次推移</li>
-                <li>月末棚卸の見積と補正</li>
-                <li>借入金明細</li>
-                <li>当期の施策と添付資料</li>
-                <li>過去の決算</li>
+                {toc.map((t) => (
+                  <li>{t}</li>
+                ))}
               </ol>
               <table class="meta">
                 <tbody>
@@ -260,6 +268,47 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
             </>
           )}
         </Page>
+        {tg && (
+          <Page title="今期の目標" no={++no}>
+            <p class="sub">
+              単位：円　前期実績は決算確定値。{asOf}の実績・目安は棚卸補正後。目安＝今期目標 × 前期の同じ時期までに通期の何割だったか（季節の偏りを考慮）
+            </p>
+            <table class="fin">
+              <thead>
+                <tr>
+                  <th class="name">科目</th>
+                  <th>前期実績</th>
+                  <th>今期目標</th>
+                  <th>前期比（利益は差額）</th>
+                  <th>{asOf} 実績</th>
+                  <th>{asOf} 目安</th>
+                  <th>進捗（実績÷目標）</th>
+                  <th class="name">状況</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tg.rows.map((r) => (
+                  <tr class={r.kind === 'derived' ? 'total lv1' : 'lv2'}>
+                    <td class="name">{r.name}</td>
+                    <Yen v={r.prior} />
+                    <Yen v={r.target} />
+                    <td class="num">{r.target === null || r.prior === null ? '—' : PROFIT_KEYS.has(r.key) ? signedYen(r.target - r.prior) : pct(r.target, r.prior)}</td>
+                    <Yen v={r.ytd} />
+                    <Yen v={r.expected} />
+                    <td class="num">{r.target && r.ytd !== null && r.target > 0 ? `${((r.ytd / r.target) * 100).toFixed(1)}%` : '—'}</td>
+                    <td class="name">{r.status ? TARGET_STATUS[r.better][r.status] : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {tg.note && (
+              <>
+                <h3>目標の考え方</h3>
+                <p class="note-text">{tg.note}</p>
+              </>
+            )}
+          </Page>
+        )}
         <Page title="当期の施策と添付資料" no={++no}>
           {data.initiatives.length === 0 && <p class="sub">登録なし</p>}
           {data.initiatives.map((i, idx) => (

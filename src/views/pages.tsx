@@ -287,6 +287,7 @@ const ACTION_LABEL: Record<string, string> = {
   loan_delete: '借入を削除',
   package_finalize: '確定版を保存',
   targets_save: '目標を保存',
+  error: 'エラー',
   dev_seed: 'デモデータ投入',
 };
 

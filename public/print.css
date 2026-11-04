@@ -95,6 +95,7 @@ figcaption .legend { font-weight: 400; color: var(--ink-2); }
 .chart .hit { fill: transparent; }
 
 .initiative { margin-bottom: 4mm; break-inside: avoid; }
+.note-text { white-space: pre-wrap; font-size: 9pt; line-height: 1.7; margin: 0; padding: 3mm 4mm; border: 0.5pt solid var(--line); border-radius: 1.5mm; background: #fcfbf8; }
 table.kv { border-collapse: collapse; width: 100%; font-size: 8.4pt; }
 table.kv th { text-align: left; width: 20mm; vertical-align: top; font-weight: 400; color: var(--muted); padding: 1mm 3mm 1mm 0; border-top: 0.4pt solid var(--line-soft); }
 table.kv td { padding: 1mm 0; white-space: pre-wrap; border-top: 0.4pt solid var(--line-soft); }

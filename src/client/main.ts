@@ -23,6 +23,164 @@ const root = document.getElementById('root') as HTMLElement;
 const ALLOWED_UPLOADS = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'text/csv', 'text/plain']);
 
 let env: Record<string, unknown> = {};
+let dbRef: any = null;
+
+// ---- 保存前の入力（下書き）を、描き直しや読み込み直しの後に戻す ----
+// フォームごとに「最初に表示した値」と違う欄だけを sessionStorage に保管する。
+type Drafts = Record<string, Record<string, string | string[]>>;
+const DRAFT_KEY = 'finance-drafts';
+const readDrafts = (): Drafts => {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}') as Drafts;
+  } catch {
+    return {};
+  }
+};
+const writeDrafts = (d: Drafts) => {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* 保管できない環境では、描き直しの間だけメモリで持つ */
+  }
+  memDrafts = d;
+};
+let memDrafts: Drafts = {};
+let restoring = false;
+
+function formKey(form: HTMLFormElement): string | null {
+  if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return null;
+  const ids = ['fy', 'month', 'id', 'initiative_id', 'return']
+    .map((n) => (form.querySelector(`input[type=hidden][name="${n}"]`) as HTMLInputElement | null)?.value ?? '')
+    .join(',');
+  return `${form.getAttribute('action') ?? ''}|${ids}`;
+}
+
+function fieldsOf(form: HTMLFormElement): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[] {
+  return [...form.elements].filter((el): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement => {
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)) return false;
+    if (!el.name) return false;
+    if (el instanceof HTMLInputElement && ['hidden', 'file', 'submit', 'button', 'password'].includes(el.type)) return false;
+    return true;
+  });
+}
+
+/** フォームの、最初の表示から変わった欄だけを取り出す */
+function changedValues(form: HTMLFormElement): Record<string, string | string[]> | null {
+  const out: Record<string, string | string[]> = {};
+  for (const el of fieldsOf(form)) {
+    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+      if (el.checked !== el.defaultChecked) {
+        if (el.type === 'radio') out[el.name] = el.checked ? el.value : (out[el.name] as string) ?? '';
+        else out[`${el.name}::${el.value}`] = el.checked ? '1' : '0';
+      }
+      continue;
+    }
+    if (el instanceof HTMLSelectElement) {
+      // 既定は selected 属性の付いた選択肢、なければ先頭（ブラウザが自動で選ぶもの）
+      const def = [...el.options].find((o) => o.defaultSelected) ?? el.options[0];
+      if (def && el.value !== def.value) out[el.name] = el.value;
+      continue;
+    }
+    if (el.value !== el.defaultValue) out[el.name] = el.value;
+  }
+  for (const k of Object.keys(out)) if (out[k] === '' && !k.includes('::')) {
+    // ラジオで「外れた側」だけが記録された場合は捨てる
+    const r = form.querySelector(`input[type=radio][name="${k}"]`);
+    if (r) delete out[k];
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** いまの画面の下書きを保管する。except のフォームは対象外 */
+function captureDrafts(except?: HTMLFormElement | null) {
+  const page = currentPage();
+  const all = readDrafts();
+  for (const form of root.querySelectorAll('form')) {
+    const key = formKey(form);
+    if (!key || form === except) continue;
+    const vals = changedValues(form);
+    const k = `${page}#${key}`;
+    if (vals) all[k] = vals;
+    else delete all[k];
+  }
+  writeDrafts(all);
+}
+
+function restoreDrafts(): number {
+  const page = currentPage();
+  const all = readDrafts();
+  let restored = 0;
+  for (const form of root.querySelectorAll('form')) {
+    const key = formKey(form);
+    if (!key) continue;
+    const vals = all[`${page}#${key}`];
+    if (!vals) continue;
+    for (const [name, v] of Object.entries(vals)) {
+      if (name.includes('::')) {
+        const [n, val] = name.split('::');
+        const el = form.querySelector(`input[type=checkbox][name="${CSS.escape(n)}"][value="${CSS.escape(val)}"]`) as HTMLInputElement | null;
+        if (el) el.checked = v === '1';
+        continue;
+      }
+      const els = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+      els.forEach((el) => {
+        if (el instanceof HTMLInputElement && el.type === 'radio') el.checked = el.value === v;
+        else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) el.value = String(v);
+      });
+      restored++;
+    }
+    restoring = true;
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+    restoring = false;
+  }
+  return restored;
+}
+
+/** 保存していない変更があるフォームに「未保存」を表示する */
+function markDirty(form: HTMLFormElement) {
+  if (!formKey(form)) return;
+  const dirty = !!changedValues(form);
+  form.classList.toggle('is-dirty', dirty);
+  const btn = form.querySelector('button.btn.primary, button:not([type=button])') as HTMLButtonElement | null;
+  if (!btn) return;
+  let note = form.querySelector('.unsaved-note') as HTMLElement | null;
+  if (dirty && !note) {
+    note = document.createElement('span');
+    note.className = 'unsaved-note';
+    note.textContent = '未保存の変更があります';
+    btn.insertAdjacentElement('afterend', note);
+  }
+  if (note) note.hidden = !dirty;
+}
+
+function forgetDraft(form: HTMLFormElement) {
+  const key = formKey(form);
+  if (!key) return;
+  const all = readDrafts();
+  delete all[`${currentPage()}#${key}`];
+  writeDrafts(all);
+}
+
+let pagePath = '/report';
+/** 入力中の下書き保管の待ち時間。画面を描き直すときは取り消す */
+let editTimer: ReturnType<typeof setTimeout> | null = null;
+/** 下書きの持ち主になる画面（パスだけ。年度・月はフォーム内の hidden 項目で区別する） */
+const currentPage = () => pagePath.replace(/[?#].*$/, '');
+
+// ---- エラーの記録（あとで原因を調べるため。直近 50 件） ----
+async function logError(where: string, e: unknown) {
+  try {
+    if (!dbRef) return;
+    const ref = dbRef.doc('meta/errors');
+    const snap = await ref.get();
+    const entries = ((snap.exists ? snap.data()?.entries : []) as unknown[]) ?? [];
+    const err = e as { code?: string; message?: string; stack?: string };
+    entries.unshift({ at: new Date().toISOString(), where, page: pagePath, code: err?.code ?? null, message: String(err?.message ?? e).slice(0, 500), stack: String(err?.stack ?? '').slice(0, 800) });
+    await ref.set({ entries: entries.slice(0, 50) });
+  } catch {
+    /* 記録できなくても画面は続ける */
+  }
+}
 let downloads: any = null;
 let busy = false;
 
@@ -74,7 +232,14 @@ function pathOf(full: string): string {
   return u.pathname + u.search + u.hash;
 }
 
-async function render(url: string, init?: RequestInit) {
+async function render(url: string, init?: RequestInit, submitted?: HTMLFormElement | null) {
+  // 描き直す前に、送信したフォーム以外の入力を保管しておく（入力中の保管待ちは取り消す）
+  if (editTimer) clearTimeout(editTimer);
+  editTimer = null;
+  captureDrafts(submitted);
+  const submittedKey = submitted ? formKey(submitted) : null;
+  const submittedVals = submitted ? changedValues(submitted) : null;
+  const fromPage = currentPage();
   const { res, url: finalUrl } = await request(url, init);
   const html = await res.text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -86,8 +251,21 @@ async function render(url: string, init?: RequestInit) {
   } catch {
     /* 保存できなくても動く */
   }
+  pagePath = path;
   decorate();
   window.FinanceUI?.initPage(root);
+  if (res.status >= 500) void logError(`render ${pathOf(finalUrl)}`, new Error(doc.querySelector('main p')?.textContent ?? `HTTP ${res.status}`));
+  // 保存に失敗して同じ画面に戻ったときは、送信した入力も戻す
+  if (submittedKey && submittedVals) {
+    const failed = !!root.querySelector('[data-flash="error"]') || res.status >= 400;
+    const all = readDrafts();
+    if (failed) all[`${fromPage}#${submittedKey}`] = submittedVals;
+    else delete all[`${fromPage}#${submittedKey}`];
+    writeDrafts(all);
+  }
+  const restored = restoreDrafts();
+  root.querySelectorAll('form').forEach((f) => markDirty(f));
+  if (restored) toast('保存していない入力を戻しました。保存ボタンを押すまでは保存されません', 'info', 7000);
   const hash = new URL(finalUrl).hash.slice(1);
   const target = hash ? document.getElementById(decodeURIComponent(hash)) : null;
   if (target) target.scrollIntoView({ block: 'start' });
@@ -104,15 +282,22 @@ function decorate() {
   if (!downloads) root.querySelectorAll<HTMLAnchorElement>('a[href^="/print"]').forEach((a) => (a.hidden = true));
 }
 
-async function go(url: string, init?: RequestInit, label?: string) {
-  if (busy) return;
+let busySince = 0;
+async function go(url: string, init?: RequestInit, label?: string, submitted?: HTMLFormElement | null) {
+  // 前の処理が終わらないまま止まっていても、1分たてば次の操作を受け付ける
+  if (busy && Date.now() - busySince < 60000) {
+    toast('処理中です。終わるまでお待ちください', 'info', 3000);
+    return;
+  }
   busy = true;
+  busySince = Date.now();
   document.body.classList.add('client-busy');
   if (label) toast(label);
   try {
-    await render(url, init);
+    await render(url, init, submitted);
     if (label) toast('');
   } catch (e) {
+    void logError(`go ${init?.method ?? 'GET'} ${url}`, e);
     toast((e as Error).message || 'うまく表示できませんでした', 'error', 8000);
   } finally {
     busy = false;
@@ -167,6 +352,20 @@ function confirmBox(text: string): Promise<boolean> {
 }
 
 function wireEvents() {
+  const onEdit = (e: Event) => {
+    const f = (e.target as HTMLElement)?.closest?.('form') as HTMLFormElement | null;
+    if (f && root.contains(f)) markDirty(f);
+    if (busy || restoring || !root.contains(e.target as Node)) return;
+    if (editTimer) clearTimeout(editTimer);
+    editTimer = setTimeout(() => {
+      editTimer = null;
+      if (!busy) captureDrafts();
+    }, 400);
+  };
+  document.addEventListener('input', onEdit);
+  document.addEventListener('change', onEdit);
+  window.addEventListener('error', (e) => void logError('window.error', e.error ?? e.message));
+  window.addEventListener('unhandledrejection', (e) => void logError('unhandledrejection', e.reason));
   document.addEventListener('click', (e) => {
     const a = (e.target as HTMLElement).closest?.('a') as HTMLAnchorElement | null;
     if (!a || !root.contains(a)) return;
@@ -193,7 +392,7 @@ function wireEvents() {
       return void go(`${action}?${q}`);
     }
     const label = action === '/sync' ? 'freee から取り込んでいます。数十秒かかることがあります…' : action === '/attachments' ? 'アップロードしています…' : undefined;
-    void go(action, { method: 'POST', body: data }, label);
+    void go(action, { method: 'POST', body: data }, label, form);
   });
 }
 
@@ -208,6 +407,7 @@ async function start() {
     return;
   }
   downloads = dl;
+  dbRef = db;
   const uploaded = new Map<string, { id: string; url: string }>();
   const files = {
     uploaded,
@@ -242,6 +442,7 @@ async function start() {
   let first = '/report';
   try {
     first = sessionStorage.getItem('finance-path') || '/report';
+    pagePath = first;
   } catch {
     /* 既定の画面から始める */
   }

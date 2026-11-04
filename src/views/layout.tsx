@@ -70,13 +70,13 @@ export const Layout: FC<{ title: string; active?: string; actor?: string; flash?
         </aside>
         <main>
           {flash && (
-            <p class="flash" role="status">
+            <p class="flash" role="status" data-flash="ok">
               <span class="flash-mark">✓</span>
               {flash}
             </p>
           )}
           {error && (
-            <p class="flash error" role="alert">
+            <p class="flash error" role="alert" data-flash="error">
               <span class="flash-mark">!</span>
               {error}
             </p>
