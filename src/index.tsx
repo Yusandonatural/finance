@@ -80,6 +80,15 @@ const str = (v: unknown): string | null => {
   return s ? s : null;
 };
 
+/** 送信内容を読む。読めなかったときは、原因がわかる文で止める */
+async function readBody(c: Context<AppEnv>): Promise<Record<string, string | File>> {
+  try {
+    return (await c.req.parseBody()) as Record<string, string | File>;
+  } catch (e) {
+    throw new Error(`送信内容を読み取れませんでした（${(e as Error).message}）。画面を読み込み直して、もう一度お試しください`);
+  }
+}
+
 function flash(c: Context<AppEnv>, msg: string, kind: 'ok' | 'error' = 'ok') {
   if (c.env.FLASH) {
     c.env.FLASH[kind] = msg;
@@ -186,7 +195,7 @@ app.get('/sync', async (c) => {
 });
 
 app.post('/sync', async (c) => {
-  const body = await c.req.parseBody();
+  const body = await readBody(c);
   const fy = int(body.fy);
   const month = int(body.month);
   if (!fy || !month) {
@@ -245,7 +254,7 @@ app.get('/adjust', async (c) => {
 });
 
 app.post('/adjust', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const fy = int(b.fy);
   const month = int(b.month);
   if (!fy || !month) return c.redirect('/adjust');
@@ -289,7 +298,7 @@ app.get('/initiatives', async (c) => {
 });
 
 app.post('/initiatives', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const fy = int(b.fy);
   const title = str(b.title);
   if (!fy || !title) {
@@ -316,7 +325,7 @@ app.post('/initiatives', async (c) => {
 });
 
 app.post('/initiatives/:id/delete', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   await deleteInitiative(c.env, Number(c.req.param('id')));
   await audit(c.env, c.get('actor'), 'initiative_delete', { id: c.req.param('id') });
   flash(c, '施策を削除しました');
@@ -327,7 +336,7 @@ const MAX_UPLOAD = 20 * 1024 * 1024;
 const INLINE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 
 app.post('/attachments', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const back = (fy: number | null) => (b.return === 'closings' ? '/closings#docs' : `/initiatives?fy=${fy ?? ''}`);
   const fy = int(b.fy);
   const file = b.file;
@@ -386,7 +395,7 @@ app.get('/files/:id', async (c) => {
 });
 
 app.post('/attachments/:id/delete', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const a = await getAttachment(c.env, Number(c.req.param('id')));
   if (a) {
     // 確定済みパッケージは添付名のみを保持しているため、ファイル本体は削除してよい
@@ -412,7 +421,7 @@ app.get('/loans', async (c) => {
 });
 
 app.post('/loans', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const lender = str(b.lender);
   if (!lender) {
     flash(c, '借入先は必須です', 'error');
@@ -454,13 +463,18 @@ app.get('/closings', async (c) => {
 });
 
 app.post('/closings/years', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   await setMeta(c.env, 'compare_years', String(normalizeYears(b.n)));
   return c.redirect('/closings');
 });
 
 app.post('/closings/sync', async (c) => {
-  const b = await c.req.parseBody();
+  let b: Record<string, string | File> = {};
+  try {
+    b = await readBody(c);
+  } catch {
+    // 「取り直す」の印が読めなくても、取込済みを飛ばす通常の取込として進める
+  }
   try {
     const r = await syncAllClosings(c.env, { force: b.force === '1', actor: c.get('actor') });
     const parts = [`${r.years.length}期分を取り込みました（freee API ${r.calls} 回）`];
@@ -492,7 +506,7 @@ app.get('/targets', async (c) => {
 });
 
 app.post('/targets', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const fy = int(b.fy);
   if (!fy) return c.redirect('/targets');
   const { view } = await targetView(c.env, fy);
@@ -526,7 +540,7 @@ app.get('/history', async (c) => {
 });
 
 app.post('/packages', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   const fy = int(b.fy);
   const month = int(b.month);
   if (!fy || !month) return c.redirect('/report');
@@ -543,7 +557,7 @@ app.post('/packages', async (c) => {
 });
 
 app.post('/packages/:id', async (c) => {
-  const b = await c.req.parseBody();
+  const b = await readBody(c);
   await updatePackageSubmission(c.env, Number(c.req.param('id')), str(b.submitted_to), str(b.submitted_on), str(b.memo));
   flash(c, '提出情報を保存しました');
   return c.redirect('/history');

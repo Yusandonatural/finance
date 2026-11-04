@@ -391,8 +391,15 @@ function wireEvents() {
       for (const [k, v] of data) if (typeof v === 'string') q.append(k, v);
       return void go(`${action}?${q}`);
     }
-    const label = action === '/sync' ? 'freee から取り込んでいます。数十秒かかることがあります…' : action === '/attachments' ? 'アップロードしています…' : undefined;
-    void go(action, { method: 'POST', body: data }, label, form);
+    const label =
+      action === '/sync' ? 'freee から取り込んでいます。数十秒かかることがあります…' : action === '/closings/sync' ? 'freee から過去の決算を取り込んでいます。1〜2分かかることがあります…' : action === '/attachments' ? 'アップロードしています…' : undefined;
+    // 送信内容は空にしない（claude.ai の画面では、空のフォームを読み戻すと失敗することがある）
+    data.append('_sent', '1');
+    const hasFile = [...data.values()].some((v) => typeof v !== 'string');
+    // ファイルを含まないフォームは、読み戻しが確実な URL エンコード形式で送る
+    const body = hasFile ? data : new URLSearchParams([...data].map(([k, v]) => [k, String(v)]));
+    const headers = hasFile ? undefined : { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' };
+    void go(action, { method: 'POST', body, headers }, label, form);
   });
 }
 
