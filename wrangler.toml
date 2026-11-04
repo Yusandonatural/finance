@@ -1,16 +1,19 @@
 name = "finance"
 main = "src/index.tsx"
 compatibility_date = "2026-09-01"
-# workers.dev は無効化し、Cloudflare Access で保護されたカスタムドメインのみで公開する
-workers_dev = false
-routes = [{ pattern = "finance.yusando.com", custom_domain = true }]
+# yusando.com の DNS は Route 53 にあり Cloudflare のゾーンがないため、workers.dev で公開する。
+# 保護は Cloudflare Access（workers.dev に Access を有効化）と、アプリ側の JWT 検証で行う。
+# 将来 yusando.com を Cloudflare に移したら、workers_dev = false にして次の行を戻す:
+#   routes = [{ pattern = "finance.yusando.com", custom_domain = true }]
+workers_dev = true
 
 [assets]
 directory = "./public"
 
 [vars]
 FREEE_COMPANY_ID = "796362"
-APP_ORIGIN = "https://finance.yusando.com"
+# 空なら、アクセスされたアドレス（https://finance.<アカウント>.workers.dev）をそのまま使う
+APP_ORIGIN = ""
 # Cloudflare Access（Zero Trust）のチームドメインとアプリケーション AUD タグ。
 # 両方が入っていないと本番では全リクエストを 403 にする（安全側に倒す）。
 ACCESS_TEAM_DOMAIN = ""

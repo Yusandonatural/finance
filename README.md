@@ -1,7 +1,7 @@
 # finance — 悠三堂 銀行提出用 月次試算表アプリ
 
 freee 会計のデータから、**月末棚卸を据置法で補正した**銀行提出用の月次試算表パッケージ（B/S・P/L・製造原価報告書の3期比較、月次推移、借入金明細、当期施策、添付資料）を作る社内アプリ。
-公開先は `https://finance.yusando.com`（Cloudflare Access で保護）。
+公開先は `https://finance.<Cloudflare のアカウント名>.workers.dev`（Cloudflare Access で保護）。yusando.com の DNS は Route 53 にあるため、カスタムドメインは使っていない。
 
 | ドキュメント | 内容 |
 |---|---|

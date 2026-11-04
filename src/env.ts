@@ -3,6 +3,7 @@ export interface Env {
   FILES: R2Bucket;
   ASSETS?: Fetcher;
   FREEE_COMPANY_ID: string;
+  /** 空なら、アクセスされたアドレスを使う */
   APP_ORIGIN: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;

@@ -71,7 +71,7 @@
 
 ## 5. 既知の課題・注意点
 
-- **yusando.com の DNS の所在を未確認**（開発環境から DNS 照会ができなかった）。Cloudflare にあれば `finance.yusando.com` をそのまま使える。Route 53 のままなら README の B 案（workers.dev + Access）。
+- **yusando.com の DNS は Route 53**（2026-11-05、`wrangler deploy` が「Could not find zone for finance.yusando.com」で確定）。そのため workers.dev で公開する設定に変更済み。`APP_ORIGIN` は空にしてあり、freee のコールバック URL はアクセスされたアドレスから組み立てる。
 - freee 実 API での取込は、OAuth 登録前のため未確認。応答の正規化（`src/freee/client.ts` の `fetchReport`）は freee MCP で取得した実応答の形に合わせてある。
 - 月次推移の単月データは、テスト用フィクスチャでは主要な合計行だけを持つ。実取込では全行が入る。
 

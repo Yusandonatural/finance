@@ -12,7 +12,8 @@ export interface TokenSet {
 }
 
 export function redirectUri(env: Env, reqUrl: string): string {
-  const origin = env.DEV_MODE === '1' ? new URL(reqUrl).origin : env.APP_ORIGIN;
+  // APP_ORIGIN が空なら、アクセスされたアドレスを使う（workers.dev で公開する場合）
+  const origin = env.DEV_MODE === '1' || !env.APP_ORIGIN ? new URL(reqUrl).origin : env.APP_ORIGIN;
   return `${origin}/auth/freee/callback`;
 }
 
