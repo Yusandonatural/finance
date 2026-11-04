@@ -4,6 +4,8 @@ import type { Bundle, Settings } from './report/assemble';
 import type { InvCat, Method } from './report/types';
 import { lastMonth, monthsUpTo } from './lib/fiscal';
 import * as docs from './store/docs';
+import { closingSummary } from './report/closings';
+import type { PastFy } from './report/types';
 
 export type SnapshotKind = 'pl3' | 'cr3' | 'bs3' | 'pl_fy' | 'cr_fy' | 'bs_fy';
 
@@ -34,6 +36,12 @@ export async function listFiscalYears(env: Env): Promise<FreeeFiscalYear[]> {
   if (env.DOCS) return (docs.listFiscalYears as (...a: unknown[]) => any)(...arguments);
   const r = await env.DB.prepare('SELECT fy, start_date, end_date FROM fiscal_years ORDER BY fy').all<FreeeFiscalYear>();
   return r.results;
+}
+
+/** 期末月。設立初年度のように短い期もあるので、freee の終了日から取る */
+export function endMonthOf(fys: FreeeFiscalYear[], fy: number): number {
+  const f = fys.find((x) => x.fy === fy);
+  return f ? Number(f.end_date.slice(5, 7)) : lastMonth(startMonthOf(fys, fy));
 }
 
 export function startMonthOf(fys: FreeeFiscalYear[], fy: number): number {
@@ -101,7 +109,7 @@ export function assembleBundle(fy: number, month: number, fys: FreeeFiscalYear[]
   };
   for (const y of [fy - 1, fy - 2, fy - 3]) {
     const s = startMonthOf(fys, y);
-    const e = lastMonth(s);
+    const e = endMonthOf(fys, y);
     const d = { pl: get(y, 'pl_fy', s, e)?.report, cr: get(y, 'cr_fy', s, e)?.report, bs: get(y, 'bs_fy', s, e)?.report };
     if (d.pl || d.cr || d.bs) bundle.fyData[y] = d;
   }
@@ -119,7 +127,25 @@ export async function loadBundle(env: Env, fy: number, month: number): Promise<B
     .bind(fy - 3, fy)
     .all<{ fy: number; kind: SnapshotKind; start_month: number; end_month: number; body_json: string; fetched_at: string }>();
   const list = rows.results.map((r) => ({ fy: r.fy, kind: r.kind, start_month: r.start_month, end_month: r.end_month, report: JSON.parse(r.body_json) as FreeeReport, fetched_at: r.fetched_at }));
-  return assembleBundle(fy, month, fys, await getMeta(env, 'company_name'), list);
+  const bundle = assembleBundle(fy, month, fys, await getMeta(env, 'company_name'), list);
+  bundle.closings = await listClosings(env);
+  return bundle;
+}
+
+/** 取込済みの全期の決算要約 */
+export async function listClosings(env: Env): Promise<PastFy[]> {
+  if (env.DOCS) return docs.listClosings(env);
+  const [fys, rows] = await Promise.all([
+    listFiscalYears(env),
+    env.DB.prepare("SELECT fy, kind, body_json FROM snapshots WHERE kind IN ('pl_fy', 'cr_fy', 'bs_fy')").all<{ fy: number; kind: SnapshotKind; body_json: string }>(),
+  ]);
+  const by = new Map<number, { pl?: FreeeReport; cr?: FreeeReport; bs?: FreeeReport }>();
+  for (const r of rows.results) {
+    const d = by.get(r.fy) ?? {};
+    d[r.kind.replace('_fy', '') as 'pl' | 'cr' | 'bs'] = JSON.parse(r.body_json) as FreeeReport;
+    by.set(r.fy, d);
+  }
+  return [...by].map(([fy, d]) => closingSummary(fy, fys.find((f) => f.fy === fy), d)).sort((a, b) => b.fy - a.fy);
 }
 
 // ---------- settings ----------
@@ -237,6 +263,8 @@ export interface Attachment {
   size: number | null;
   uploaded_by: string | null;
   uploaded_at: string;
+  /** 'closing' は過去の決算書（年度ごと）。null は施策・年度共通の添付 */
+  category?: string | null;
   /** claude.ai 版：添付を開く URL（アップロードした資産の URL） */
   url?: string | null;
   asset_id?: string | null;
@@ -244,7 +272,14 @@ export interface Attachment {
 
 export async function listAttachments(env: Env, fy: number): Promise<Attachment[]> {
   if (env.DOCS) return (docs.listAttachments as (...a: unknown[]) => any)(...arguments);
-  const r = await env.DB.prepare('SELECT * FROM attachments WHERE fy = ? ORDER BY initiative_id IS NOT NULL, initiative_id, id').bind(fy).all<Attachment>();
+  const r = await env.DB.prepare("SELECT * FROM attachments WHERE fy = ? AND (category IS NULL OR category != 'closing') ORDER BY initiative_id IS NOT NULL, initiative_id, id").bind(fy).all<Attachment>();
+  return r.results;
+}
+
+/** 過去の決算書（全年度） */
+export async function listClosingAttachments(env: Env): Promise<Attachment[]> {
+  if (env.DOCS) return docs.listClosingAttachments(env);
+  const r = await env.DB.prepare("SELECT * FROM attachments WHERE category = 'closing' ORDER BY fy DESC, id").all<Attachment>();
   return r.results;
 }
 
@@ -255,8 +290,8 @@ export async function getAttachment(env: Env, id: number): Promise<Attachment | 
 
 export async function insertAttachment(env: Env, a: Omit<Attachment, 'id'>): Promise<void> {
   if (env.DOCS) return (docs.insertAttachment as (...a: unknown[]) => any)(...arguments);
-  await env.DB.prepare('INSERT INTO attachments (fy, initiative_id, title, filename, r2_key, content_type, size, uploaded_by, uploaded_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)')
-    .bind(a.fy, a.initiative_id, a.title, a.filename, a.r2_key, a.content_type, a.size, a.uploaded_by, a.uploaded_at)
+  await env.DB.prepare('INSERT INTO attachments (fy, initiative_id, title, filename, r2_key, content_type, size, uploaded_by, uploaded_at, category) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)')
+    .bind(a.fy, a.initiative_id, a.title, a.filename, a.r2_key, a.content_type, a.size, a.uploaded_by, a.uploaded_at, a.category ?? null)
     .run();
 }
 
@@ -385,6 +420,6 @@ export async function getFyPl(env: Env, fy: number): Promise<FreeeReport | undef
   if (env.DOCS) return (docs.getFyPl as (...a: unknown[]) => any)(...arguments);
   const fys = await listFiscalYears(env);
   const s = startMonthOf(fys, fy);
-  const r = await env.DB.prepare("SELECT body_json FROM snapshots WHERE fy = ? AND kind = 'pl_fy' AND start_month = ? AND end_month = ?").bind(fy, s, lastMonth(s)).first<{ body_json: string }>();
+  const r = await env.DB.prepare("SELECT body_json FROM snapshots WHERE fy = ? AND kind = 'pl_fy' AND start_month = ? AND end_month = ?").bind(fy, s, endMonthOf(fys, fy)).first<{ body_json: string }>();
   return r ? (JSON.parse(r.body_json) as FreeeReport) : undefined;
 }

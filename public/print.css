@@ -67,6 +67,9 @@ table.fin.monthly tr.sub td { color: var(--ink-2); }
 table.fin.monthly tr.first td { border-top: 0.5pt solid var(--line); }
 .neg { color: inherit; }
 table.fin td.note { white-space: normal; }
+table.fin.five td .yoy { display: block; font-size: 6.4pt; color: var(--ink-2); font-weight: 400; }
+.card-figure { margin: 0; }
+.docs-list { padding-left: 5mm; margin: 0; font-size: 8.6pt; }
 
 /* charts */
 /* flex/grid だと Chrome の印刷で行ごと次ページへ送られるため inline-block で並べる */

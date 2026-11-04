@@ -4,6 +4,7 @@ import { yen } from '../lib/format';
 import { INV_CATS, INV_LABEL, carryForwardTotal, estimateInventory, invCol3, type ManualInputs } from './inventory';
 import { addDelta, adjusted, findTotal, fyItemsSum, fyTotal, isZero, rowKey, scale, sum, toLines, totalRaw } from './lines';
 import type { Check, Col3, InvColumn, Line, Method, MonthlySeries, PastFy, Report } from './types';
+import { closingSummary } from './closings';
 
 /** freee から取り込んだ一式 */
 export interface Bundle {
@@ -20,6 +21,8 @@ export interface Bundle {
   monthly: Record<number, FreeeReport>;
   fetchedAt: string | null;
   fiscalYears?: FreeeFiscalYear[];
+  /** 取込済みの全期の決算要約（新しい順でも古い順でもよい） */
+  closings?: PastFy[];
 }
 
 export interface Settings {
@@ -224,29 +227,10 @@ export function buildReport(b: Bundle, s: Settings = DEFAULT_SETTINGS, now: Date
     }),
   }));
 
-  // ---- 過去の決算 ----
-  const pastFy: PastFy[] = [fy - 1, fy - 2, fy - 3]
-    .filter((y) => b.fyData[y]?.pl || b.fyData[y]?.bs)
-    .map((y) => {
-      const d = b.fyData[y];
-      const isInv = (r: { account_category_name?: string }) => r.account_category_name === '棚卸資産';
-      const isOfficer = (r: { account_item_name?: string }) => (r.account_item_name ?? '').includes('役員借入金');
-      const isLoan = (r: { account_item_name?: string }) => (r.account_item_name ?? '').includes('借入金') && !isOfficer(r);
-      return {
-        fy: y,
-        label: fyLabel(y, sm),
-        sales: fyTotal(d.pl, '売上高'),
-        grossProfit: fyTotal(d.pl, '売上総損益金額'),
-        operatingIncome: fyTotal(d.pl, '営業損益金額'),
-        ordinaryIncome: fyTotal(d.pl, '経常損益金額'),
-        netIncome: fyTotal(d.pl, '当期純損益金額'),
-        netAssets: fyTotal(d.bs, '純資産'),
-        inventory: fyItemsSum(d.bs, isInv),
-        borrowings: fyItemsSum(d.bs, isLoan),
-        officerLoans: fyItemsSum(d.bs, isOfficer),
-        depreciation: annualDepreciation(b, y),
-      };
-    });
+  // ---- 過去の決算（取込済みの全期。なければ直近3期を通期データから作る）----
+  const pastFy: PastFy[] = b.closings
+    ? b.closings.filter((c) => c.fy < fy).sort((x, y) => y.fy - x.fy)
+    : [fy - 1, fy - 2, fy - 3].filter((y) => b.fyData[y]?.pl || b.fyData[y]?.bs).map((y) => closingSummary(y, b.fiscalYears?.find((f) => f.fy === y), b.fyData[y]));
 
   const borrowings = bs
     .filter((l) => !l.isTotal && l.name.includes('借入金'))

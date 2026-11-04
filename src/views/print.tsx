@@ -4,7 +4,9 @@ import { monthLabel } from '../lib/fiscal';
 import { yen } from '../lib/format';
 import { adjusted, findTotal } from '../report/lines';
 import type { Report } from '../report/types';
-import { BridgeTable, BsTable, FlowTable, InventoryTable, MonthlyTable, PastFyTable, SensitivityTable, Yen } from './components';
+import { BridgeTable, BsTable, FiveYearTable, FlowTable, InventoryTable, MonthlyTable, PastFyList, SensitivityTable, Yen } from './components';
+import { FiveYearCharts } from './closings';
+import { fiveYearCompare } from '../report/closings';
 import { raw } from 'hono/html';
 import { groupedBars, waterfall } from './charts';
 import { fyLabel } from '../lib/fiscal';
@@ -18,6 +20,8 @@ export interface PackageData {
   loans: Loan[];
   /** 今期の目標と考え方。目標も考え方も未設定なら null（提出用ページに載せない） */
   targets?: { rows: TargetRow[]; note: string | null } | null;
+  /** 登録された過去の決算書（別添の資料として名前を載せる） */
+  closingDocs?: Attachment[];
 }
 
 const TARGET_STATUS = {
@@ -52,6 +56,8 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const dateStr = new Date(createdAt ?? r.meta.generatedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' });
   let no = 0;
   const tg = data.targets ?? null;
+  const five = fiveYearCompare(r.pastFy);
+  const closingDocs = data.closingDocs ?? [];
   const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), '当期の施策と添付資料', '過去の決算'];
   const asOf = `〜${m.month}月`;
   const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
@@ -379,9 +385,30 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           <p class="sub">添付資料は本資料とあわせて別ファイルでお渡しします。</p>
         </Page>
         <Page title="過去の決算" no={++no}>
-          <p class="sub">単位：円　決算確定値</p>
-          <PastFyTable r={r} />
-          <p class="sub">減価償却費（年）：{r.pastFy.map((p) => `${p.fy}年度 ${yen(p.depreciation)}`).join('、')}</p>
+          <p class="sub">単位：円　決算確定値（freee 会計の通期試算表）</p>
+          {five.years.length >= 2 && (
+            <>
+              <h3>過去{five.years.length}期の推移</h3>
+              <FiveYearCharts closings={r.pastFy} height={170} />
+              <FiveYearTable f={five} />
+              <p class="sub">金額の下の小さな数字は前年比。{five.salesCagr !== null ? `売上高の年平均伸び率 ${five.salesCagr >= 0 ? '+' : '▲'}${Math.abs(five.salesCagr).toFixed(1)}%。` : ''}</p>
+            </>
+          )}
+          <h3>全期の決算</h3>
+          <PastFyList items={r.pastFy} />
+          <p class="sub">減価償却費（年）：{r.pastFy.slice(0, 5).map((p) => `${p.fy}年度 ${yen(p.depreciation)}`).join('、')}</p>
+          {closingDocs.length > 0 && (
+            <>
+              <h3>決算書（別添）</h3>
+              <ol class="docs-list">
+                {closingDocs.map((a) => (
+                  <li>
+                    {a.title}（{a.filename}）
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
         </Page>
       </body>
     </html>

@@ -1,7 +1,7 @@
 import type { Env } from './env';
 import { fetchCompany, fetchReport, type ReportKind } from './freee/client';
 import type { FreeeReport } from './freee/types';
-import { audit, hasSnapshot, saveSnapshot, setMeta, startMonthOf, upsertFiscalYears, type SnapshotKind } from './db';
+import { audit, endMonthOf, hasSnapshot, saveSnapshot, setMeta, startMonthOf, upsertFiscalYears, type SnapshotKind } from './db';
 import { lastMonth, monthEndDate, monthsUpTo } from './lib/fiscal';
 
 export interface SyncResult {
@@ -49,7 +49,7 @@ export async function syncMonth(env: Env, fy: number, month: number, opts: { for
   for (const y of [fy - 1, fy - 2, fy - 3]) {
     if (!company.fiscalYears.some((f) => f.fy === y)) continue;
     const s = startMonthOf(company.fiscalYears, y);
-    const e = lastMonth(s);
+    const e = endMonthOf(company.fiscalYears, y);
     for (const [kind, api] of [
       ['pl_fy', 'trial_pl'],
       ['cr_fy', 'trial_cr'],
@@ -70,5 +70,50 @@ export async function syncMonth(env: Env, fy: number, month: number, opts: { for
   if (!upToDate) warnings.push('freee 側で集計が完了していないデータがあります');
   const result = { fy, month, calls: jobs.length + 1, upToDate, warnings };
   await audit(env, opts.actor ?? 'system', 'sync', result);
+  return result;
+}
+
+export interface ClosingSyncResult {
+  years: number[];
+  calls: number;
+  skipped: number;
+  failed: { fy: number; message: string }[];
+}
+
+/**
+ * freee にある過去の全期（進行中の今期を除く）の通期データ（P/L・製造原価・B/S）を取り込む。
+ * 取込済みの期は飛ばす（force で取り直す）。1期あたり freee API 3回。
+ */
+export async function syncAllClosings(env: Env, opts: { force?: boolean; actor?: string } = {}): Promise<ClosingSyncResult> {
+  const company = await fetchCompany(env);
+  await upsertFiscalYears(env, company.fiscalYears);
+  if (company.name) await setMeta(env, 'company_name', company.name);
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const past = company.fiscalYears.filter((f) => f.end_date < today).sort((a, b) => b.fy - a.fy);
+  const fetchedAt = new Date().toISOString();
+  const result: ClosingSyncResult = { years: [], calls: 1, skipped: 0, failed: [] };
+  for (const f of past) {
+    const s = startMonthOf(company.fiscalYears, f.fy);
+    const e = endMonthOf(company.fiscalYears, f.fy);
+    try {
+      let fetched = 0;
+      for (const [kind, api] of [
+        ['pl_fy', 'trial_pl'],
+        ['cr_fy', 'trial_cr'],
+        ['bs_fy', 'trial_bs'],
+      ] as const) {
+        if (!opts.force && (await hasSnapshot(env, f.fy, kind, s, e))) continue;
+        const rep = await fetchReport(env, api, f.fy, s, e);
+        result.calls++;
+        await saveSnapshot(env, f.fy, kind, s, e, rep, fetchedAt);
+        fetched++;
+      }
+      if (fetched) result.years.push(f.fy);
+      else result.skipped++;
+    } catch (err) {
+      result.failed.push({ fy: f.fy, message: (err as Error).message.slice(0, 200) });
+    }
+  }
+  await audit(env, opts.actor ?? 'system', 'sync_closings', result);
   return result;
 }

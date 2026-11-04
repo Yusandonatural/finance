@@ -7,6 +7,8 @@ import {
   deleteAttachment,
   deleteInitiative,
   deleteLoan,
+  listClosings,
+  listClosingAttachments,
   getFyPl,
   getTargets,
   saveTargets,
@@ -39,11 +41,12 @@ import { monthsUpTo, previousClosedMonth } from './lib/fiscal';
 import { randomToken } from './lib/crypto';
 import { buildReport } from './report/assemble';
 import type { InvCat, Method } from './report/types';
-import { syncMonth } from './sync';
+import { syncAllClosings, syncMonth } from './sync';
 import { Layout } from './views/layout';
 import { AdjustPage, EmptyPage, HistoryPage, InitiativesPage, LoansPage, ReportPage, SyncPage } from './views/pages';
 import { PrintView, type PackageData } from './views/print';
 import { TargetsPage } from './views/targets';
+import { ClosingsPage } from './views/closings';
 import { buildTargetView, targetKeys } from './report/targets';
 import * as demo from './demo/fixtures';
 
@@ -127,7 +130,8 @@ async function packageData(env: Env, fy: number, month: number): Promise<Package
   // 目標は、この試算表と同じ月までの実績で進み具合を出す
   const hasTargets = Object.keys(saved.values).length > 0 || !!saved.note;
   const targets = hasTargets ? { rows: buildTargetView(fy, priorPl, report, saved.values).rows, note: saved.note } : null;
-  return { report, initiatives, attachments, loans, targets };
+  const closingDocs = await listClosingAttachments(env);
+  return { report, initiatives, attachments, loans, targets, closingDocs };
 }
 
 // ---------- pages ----------
@@ -322,16 +326,17 @@ const INLINE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 
 app.post('/attachments', async (c) => {
   const b = await c.req.parseBody();
+  const back = (fy: number | null) => (b.return === 'closings' ? '/closings#docs' : `/initiatives?fy=${fy ?? ''}`);
   const fy = int(b.fy);
   const file = b.file;
   const title = str(b.title);
   if (!fy || !title || !(file instanceof File) || file.size === 0) {
     flash(c, '資料名とファイルを指定してください', 'error');
-    return c.redirect(`/initiatives?fy=${fy ?? ''}`);
+    return c.redirect(back(fy));
   }
   if (file.size > MAX_UPLOAD) {
     flash(c, 'ファイルは 20MB までです', 'error');
-    return c.redirect(`/initiatives?fy=${fy}`);
+    return c.redirect(back(fy));
   }
   const safeName = file.name.replace(/[\\/\u0000-\u001f]/g, '_').slice(-120);
   const uid = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -341,11 +346,12 @@ app.post('/attachments', async (c) => {
     await c.env.FILES.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
   } catch (e) {
     flash(c, (e as Error).message || '添付できませんでした', 'error');
-    return c.redirect(`/initiatives?fy=${fy}`);
+    return c.redirect(back(fy));
   }
   await insertAttachment(c.env, {
     fy,
     initiative_id: int(b.initiative_id),
+    category: b.category === 'closing' ? 'closing' : null,
     title,
     filename: safeName,
     r2_key: key,
@@ -356,7 +362,7 @@ app.post('/attachments', async (c) => {
   });
   await audit(c.env, c.get('actor'), 'attachment_upload', { fy, title, key });
   flash(c, '添付しました');
-  return c.redirect(`/initiatives?fy=${fy}`);
+  return c.redirect(back(fy));
 });
 
 app.get('/files/:id', async (c) => {
@@ -387,7 +393,7 @@ app.post('/attachments/:id/delete', async (c) => {
     await audit(c.env, c.get('actor'), 'attachment_delete', { id: a.id, title: a.title });
   }
   flash(c, '添付を削除しました');
-  return c.redirect(`/initiatives?fy=${int(b.fy) ?? ''}`);
+  return c.redirect(b.return === 'closings' ? '/closings#docs' : `/initiatives?fy=${int(b.fy) ?? ''}`);
 });
 
 // ---------- loans ----------
@@ -433,6 +439,30 @@ app.post('/loans/:id/delete', async (c) => {
   await audit(c.env, c.get('actor'), 'loan_delete', { id: c.req.param('id') });
   flash(c, '借入を削除しました');
   return c.redirect('/loans');
+});
+
+// ---------- past closings ----------
+app.get('/closings', async (c) => {
+  const [closings, docsList, fys, status] = await Promise.all([listClosings(c.env), listClosingAttachments(c.env), listFiscalYears(c.env), tokenStatus(c.env)]);
+  return c.html(
+    <Layout title="過去の決算" active="/closings" actor={c.get('actor')} {...takeFlash(c)}>
+      <ClosingsPage closings={closings} docs={docsList} fys={fys} connected={status.connected} />
+    </Layout>,
+  );
+});
+
+app.post('/closings/sync', async (c) => {
+  const b = await c.req.parseBody();
+  try {
+    const r = await syncAllClosings(c.env, { force: b.force === '1', actor: c.get('actor') });
+    const parts = [`${r.years.length}期分を取り込みました（freee API ${r.calls} 回）`];
+    if (r.skipped) parts.push(`取込済みの ${r.skipped}期は飛ばしました`);
+    if (r.failed.length) parts.push(`取り込めなかった期：${r.failed.map((f) => `${f.fy}年度（${f.message}）`).join('、')}`);
+    flash(c, parts.join('。'), r.failed.length && !r.years.length ? 'error' : 'ok');
+  } catch (e) {
+    flash(c, (e as Error).message, 'error');
+  }
+  return c.redirect('/closings');
 });
 
 // ---------- targets ----------

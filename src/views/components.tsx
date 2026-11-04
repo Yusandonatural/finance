@@ -1,7 +1,8 @@
 import type { FC } from 'hono/jsx';
 import { yen, pct, signedYen } from '../lib/format';
 import { adjusted } from '../report/lines';
-import type { Line, Report } from '../report/types';
+import type { Line, PastFy, Report } from '../report/types';
+import type { FiveYear } from '../report/closings';
 
 export const Yen: FC<{ v: number | null | undefined; signed?: boolean }> = ({ v, signed }) => (
   <td class={`num${v !== null && v !== undefined && v < 0 ? ' neg' : ''}`}>{v === null || v === undefined ? '—' : signed ? signedYen(v) : yen(v)}</td>
@@ -186,7 +187,8 @@ export const MonthlyTable: FC<{ r: Report }> = ({ r }) => (
   </table>
 );
 
-export const PastFyTable: FC<{ r: Report }> = ({ r }) => (
+/** 過去の決算の一覧（新しい順） */
+export const PastFyList: FC<{ items: PastFy[] }> = ({ items }) => (
   <table class="fin">
     <thead>
       <tr>
@@ -203,9 +205,12 @@ export const PastFyTable: FC<{ r: Report }> = ({ r }) => (
       </tr>
     </thead>
     <tbody>
-      {r.pastFy.map((p) => (
+      {items.map((p) => (
         <tr>
-          <td class="name">{p.label}</td>
+          <td class="name">
+            {p.label}
+            {p.months !== undefined && p.months < 12 ? `・${p.months}ヶ月` : ''}
+          </td>
           <Yen v={p.sales} />
           <Yen v={p.grossProfit} />
           <Yen v={p.operatingIncome} />
@@ -217,6 +222,49 @@ export const PastFyTable: FC<{ r: Report }> = ({ r }) => (
           <Yen v={p.officerLoans} />
         </tr>
       ))}
+    </tbody>
+  </table>
+);
+
+export const PastFyTable: FC<{ r: Report }> = ({ r }) => <PastFyList items={r.pastFy} />;
+
+/** 過去5期の比較（古い順）。金額の下に前年比 */
+export const FiveYearTable: FC<{ f: FiveYear }> = ({ f }) => (
+  <table class="fin five">
+    <thead>
+      <tr>
+        <th class="name">科目</th>
+        {f.years.map((y) => (
+          <th>
+            {y.fy}年度
+            {y.months !== undefined && y.months < 12 ? `（${y.months}ヶ月）` : ''}
+          </th>
+        ))}
+        <th>{f.years.length}期の増減</th>
+      </tr>
+    </thead>
+    <tbody>
+      {f.rows.map((row) => {
+        const first = row.values[0];
+        const last = row.values[row.values.length - 1];
+        return (
+          <tr class={row.level === 1 ? 'total lv1' : 'lv2'}>
+            <td class="name">{row.name}</td>
+            {row.values.map((v, i) => {
+              const prev = i > 0 ? row.values[i - 1] : null;
+              return (
+                <td class={`num${v !== null && v < 0 && !row.percent ? ' neg' : ''}`}>
+                  {row.percent ? (v === null ? '—' : `${v.toFixed(1)}%`) : yen(v)}
+                  {row.yoy && i > 0 && v !== null && prev !== null && <span class="yoy">{pct(v, prev)}</span>}
+                </td>
+              );
+            })}
+            <td class="num">
+              {first === null || last === null ? '—' : row.percent ? `${last - first >= 0 ? '+' : '▲'}${Math.abs(last - first).toFixed(1)}pt` : signedYen(last - first)}
+            </td>
+          </tr>
+        );
+      })}
     </tbody>
   </table>
 );

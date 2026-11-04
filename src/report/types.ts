@@ -46,7 +46,14 @@ export interface MonthlySeries {
 export interface PastFy {
   fy: number;
   label: string;
+  /** 期の月数（設立初年度は12未満） */
+  months?: number;
   sales: number | null;
+  /** 売上の勘定科目ごとの内訳 */
+  salesItems: { name: string; amount: number }[];
+  costOfSales?: number | null;
+  sga?: number | null;
+  totalAssets?: number | null;
   grossProfit: number | null;
   operatingIncome: number | null;
   ordinaryIncome: number | null;

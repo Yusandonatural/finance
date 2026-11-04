@@ -4,6 +4,7 @@ import { raw } from 'hono/html';
 /** 線画アイコン（24px グリッド、stroke は currentColor） */
 const ICONS: Record<string, string> = {
   report: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  closings: '<path d="M5 3h10l4 4v14H5z"/><path d="M9 17v-3M12 17v-6M15 17v-4"/>',
   targets: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
   sync: '<path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1"/><path d="M18.5 3v4.2h-4.2M5.5 21v-4.2h4.2"/>',
   adjust: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/>',
@@ -20,6 +21,7 @@ export const Icon: FC<{ name: string }> = ({ name }) => (
 const NAV = [
   ['/report', '試算表', 'report'],
   ['/targets', '今期の目標', 'targets'],
+  ['/closings', '過去の決算', 'closings'],
   ['/adjust', '棚卸補正', 'adjust'],
   ['/initiatives', '施策・添付', 'initiatives'],
   ['/loans', '借入金', 'loans'],

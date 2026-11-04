@@ -16,8 +16,9 @@ import type { Env } from '../env';
 import type { FreeeFiscalYear, FreeeReport } from '../freee/types';
 import type { Bundle, Settings } from '../report/assemble';
 import type { InvCat, Method } from '../report/types';
-import { lastMonth } from '../lib/fiscal';
-import { assembleBundle, startMonthOf, type Attachment, type Initiative, type InventoryInput, type Loan, type PackageRow, type SnapshotKind, type SnapshotRow } from '../db';
+import { closingSummary } from '../report/closings';
+import type { PastFy } from '../report/types';
+import { assembleBundle, endMonthOf, startMonthOf, type Attachment, type Initiative, type InventoryInput, type Loan, type PackageRow, type SnapshotKind, type SnapshotRow } from '../db';
 
 type Doc = Record<string, any>;
 const store = (env: Env) => env.DOCS;
@@ -66,6 +67,37 @@ export async function listFiscalYears(env: Env): Promise<FreeeFiscalYear[]> {
 const snapPath = (fy: number, kind: SnapshotKind, s: number, e: number) => `snapshots/${fy}_${kind}_${s}_${e}`;
 export async function saveSnapshot(env: Env, fy: number, kind: SnapshotKind, sm: number, em: number, rep: FreeeReport, fetchedAt = nowIso()): Promise<void> {
   await write(env, snapPath(fy, kind, sm, em), { fy, kind, start_month: sm, end_month: em, report: rep, up_to_date: rep.up_to_date, fetched_at: fetchedAt });
+  if (kind.endsWith('_fy')) await refreshClosing(env, fy);
+}
+
+// 決算の要約（closings/<fy>）。画面を開くたびに大きな通期データを読まなくて済むように、取込時に作っておく
+const closingChains = new Map<number, Promise<void>>();
+async function refreshClosing(env: Env, fy: number): Promise<void> {
+  const run = async () => {
+    const fys = await listFiscalYears(env);
+    const s = startMonthOf(fys, fy);
+    const e = endMonthOf(fys, fy);
+    const [pl, cr, bs] = await Promise.all((['pl_fy', 'cr_fy', 'bs_fy'] as const).map((k) => read(env, snapPath(fy, k, s, e))));
+    if (!pl && !cr && !bs) return;
+    const summary = closingSummary(fy, fys.find((f) => f.fy === fy), { pl: pl?.report, cr: cr?.report, bs: bs?.report });
+    await write(env, `closings/${fy}`, summary as unknown as Doc);
+  };
+  // 同じ年度の要約は1つずつ書く
+  const next = (closingChains.get(fy) ?? Promise.resolve()).then(run, run);
+  closingChains.set(fy, next);
+  return next;
+}
+
+export async function listClosings(env: Env): Promise<PastFy[]> {
+  let rows = (await list(env, 'closings')) as PastFy[];
+  if (!rows.length) {
+    // 要約を作る前に取り込んだ通期データがあれば、ここで要約を作る（初回だけ）
+    const snaps = await list(env, 'snapshots', ['kind', 'in', ['pl_fy', 'cr_fy', 'bs_fy']]);
+    const years = [...new Set(snaps.map((r) => r.fy as number))];
+    for (const y of years) await refreshClosing(env, y);
+    if (years.length) rows = (await list(env, 'closings')) as PastFy[];
+  }
+  return rows.sort((a, b) => b.fy - a.fy);
 }
 export async function hasSnapshot(env: Env, fy: number, kind: SnapshotKind, sm: number, em: number): Promise<boolean> {
   return (await store(env).doc(snapPath(fy, kind, sm, em)).get()).exists;
@@ -78,13 +110,15 @@ export async function listPeriods(env: Env): Promise<{ fy: number; month: number
     .sort((a, b) => b.fy - a.fy || ord(b) - ord(a));
 }
 export async function loadBundle(env: Env, fy: number, month: number): Promise<Bundle> {
-  const [fys, rows, name] = await Promise.all([listFiscalYears(env), list(env, 'snapshots', ['fy', 'in', [fy - 3, fy - 2, fy - 1, fy]]), getMeta(env, 'company_name')]);
-  return assembleBundle(fy, month, fys, name, rows as SnapshotRow[]);
+  const [fys, rows, name, closings] = await Promise.all([listFiscalYears(env), list(env, 'snapshots', ['fy', 'in', [fy - 3, fy - 2, fy - 1, fy]]), getMeta(env, 'company_name'), listClosings(env)]);
+  const bundle = assembleBundle(fy, month, fys, name, rows as SnapshotRow[]);
+  bundle.closings = closings;
+  return bundle;
 }
 export async function getFyPl(env: Env, fy: number): Promise<FreeeReport | undefined> {
   const fys = await listFiscalYears(env);
   const s = startMonthOf(fys, fy);
-  const d = await read(env, snapPath(fy, 'pl_fy', s, lastMonth(s)));
+  const d = await read(env, snapPath(fy, 'pl_fy', s, endMonthOf(fys, fy)));
   return (d?.report as FreeeReport | undefined) ?? undefined;
 }
 
@@ -139,8 +173,12 @@ export async function deleteInitiative(env: Env, id: number): Promise<void> {
   await store(env).doc(`initiatives/${id}`).delete();
 }
 export async function listAttachments(env: Env, fy: number): Promise<Attachment[]> {
-  const rows = (await list(env, 'attachments', ['fy', '==', fy])) as Attachment[];
+  const rows = ((await list(env, 'attachments', ['fy', '==', fy])) as Attachment[]).filter((a) => a.category !== 'closing');
   return rows.sort((a, b) => (a.initiative_id === null ? 0 : 1) - (b.initiative_id === null ? 0 : 1) || (a.initiative_id ?? 0) - (b.initiative_id ?? 0) || a.id - b.id);
+}
+export async function listClosingAttachments(env: Env): Promise<Attachment[]> {
+  const rows = (await list(env, 'attachments', ['category', '==', 'closing'])) as Attachment[];
+  return rows.sort((a, b) => b.fy - a.fy || a.id - b.id);
 }
 export async function getAttachment(env: Env, id: number): Promise<Attachment | null> {
   return (await read(env, `attachments/${id}`)) as Attachment | null;
