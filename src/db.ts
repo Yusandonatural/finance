@@ -310,3 +310,32 @@ export async function recentAudit(env: Env, limit = 20): Promise<{ at: string; a
   const r = await env.DB.prepare('SELECT at, actor, action, detail_json FROM audit_log ORDER BY id DESC LIMIT ?').bind(limit).all<{ at: string; actor: string | null; action: string; detail_json: string | null }>();
   return r.results;
 }
+
+// ---------- targets ----------
+export async function getTargets(env: Env, fy: number): Promise<{ values: Record<string, number>; note: string | null; updatedAt: string | null; updatedBy: string | null }> {
+  const [rows, note] = await Promise.all([
+    env.DB.prepare('SELECT key, amount FROM targets WHERE fy = ?').bind(fy).all<{ key: string; amount: number }>(),
+    env.DB.prepare('SELECT note, updated_at, updated_by FROM target_notes WHERE fy = ?').bind(fy).first<{ note: string | null; updated_at: string | null; updated_by: string | null }>(),
+  ]);
+  return { values: Object.fromEntries(rows.results.map((r) => [r.key, r.amount])), note: note?.note ?? null, updatedAt: note?.updated_at ?? null, updatedBy: note?.updated_by ?? null };
+}
+
+/** values の null は削除。note は年度のメモ */
+export async function saveTargets(env: Env, fy: number, values: Record<string, number | null>, note: string | null, actor: string): Promise<void> {
+  const at = nowIso();
+  const stmts = Object.entries(values).map(([key, amount]) =>
+    amount === null
+      ? env.DB.prepare('DELETE FROM targets WHERE fy = ? AND key = ?').bind(fy, key)
+      : env.DB.prepare('INSERT INTO targets (fy, key, amount, updated_by, updated_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(fy, key) DO UPDATE SET amount = ?3, updated_by = ?4, updated_at = ?5').bind(fy, key, amount, actor, at),
+  );
+  stmts.push(env.DB.prepare('INSERT INTO target_notes (fy, note, updated_by, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(fy) DO UPDATE SET note = ?2, updated_by = ?3, updated_at = ?4').bind(fy, note, actor, at));
+  await env.DB.batch(stmts);
+}
+
+/** 通期（決算確定）の P/L。目標画面で前期実績に使う */
+export async function getFyPl(env: Env, fy: number): Promise<FreeeReport | undefined> {
+  const fys = await listFiscalYears(env);
+  const s = startMonthOf(fys, fy);
+  const r = await env.DB.prepare("SELECT body_json FROM snapshots WHERE fy = ? AND kind = 'pl_fy' AND start_month = ? AND end_month = ?").bind(fy, s, lastMonth(s)).first<{ body_json: string }>();
+  return r ? (JSON.parse(r.body_json) as FreeeReport) : undefined;
+}

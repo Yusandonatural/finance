@@ -273,6 +273,10 @@ export const BS_FY2025: FreeeReport = {
 export const PL_FY2025: FreeeReport = {
   up_to_date: true,
   balances: [
+    fyItem(389772212, '小売売上高', '売上高', 2, 19383055),
+    fyItem(125493772, '売上高', '売上高', 2, 1989826),
+    fyItem(389772206, '海外売上高', '売上高', 2, 1743296),
+    fyItem(391331484, 'EC売上高', '売上高', 2, 3192206),
     fyTotal('売上高', 1, '売上総損益金額', 26308383),
     fyTotal('売上原価', 2, '売上総損益金額', 12785955),
     fyTotal('期首製品棚卸', 4, '製品売上原価', 516003),

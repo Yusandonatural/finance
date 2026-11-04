@@ -7,6 +7,9 @@ import {
   deleteAttachment,
   deleteInitiative,
   deleteLoan,
+  getFyPl,
+  getTargets,
+  saveTargets,
   getAttachment,
   getPackage,
   getSettings,
@@ -40,6 +43,8 @@ import { syncMonth } from './sync';
 import { Layout } from './views/layout';
 import { AdjustPage, EmptyPage, HistoryPage, InitiativesPage, LoansPage, ReportPage, SyncPage } from './views/pages';
 import { PrintView, type PackageData } from './views/print';
+import { TargetsPage } from './views/targets';
+import { buildTargetView, targetKeys } from './report/targets';
 import * as demo from './demo/fixtures';
 
 const app = new Hono<AppEnv>();
@@ -263,7 +268,7 @@ app.post('/initiatives', async (c) => {
   const title = str(b.title);
   if (!fy || !title) {
     flash(c, '施策名は必須です', 'error');
-    return c.redirect(`/initiatives?fy=${fy ?? ''}`);
+    return c.redirect(b.return === 'targets' ? `/targets?fy=${fy ?? ''}#initiatives` : `/initiatives?fy=${fy ?? ''}`);
   }
   const status = (['planned', 'active', 'done'].includes(String(b.status)) ? b.status : 'active') as Initiative['status'];
   await saveInitiative(c.env, {
@@ -281,7 +286,7 @@ app.post('/initiatives', async (c) => {
   });
   await audit(c.env, c.get('actor'), 'initiative_save', { fy, title });
   flash(c, '施策を保存しました');
-  return c.redirect(`/initiatives?fy=${fy}`);
+  return c.redirect(b.return === 'targets' ? `/targets?fy=${fy}#initiatives` : `/initiatives?fy=${fy}`);
 });
 
 app.post('/initiatives/:id/delete', async (c) => {
@@ -402,6 +407,48 @@ app.post('/loans/:id/delete', async (c) => {
   await audit(c.env, c.get('actor'), 'loan_delete', { id: c.req.param('id') });
   flash(c, '借入を削除しました');
   return c.redirect('/loans');
+});
+
+// ---------- targets ----------
+async function targetView(env: Env, fy: number) {
+  const periods = (await listPeriods(env)).filter((p) => p.fy === fy);
+  const latest = periods[0] ?? null;
+  const [priorPl, saved, rep] = await Promise.all([getFyPl(env, fy - 1), getTargets(env, fy), latest ? reportFor(env, fy, latest.month) : Promise.resolve(null)]);
+  return { view: buildTargetView(fy, priorPl, rep?.report ?? null, saved.values), saved, latest };
+}
+
+app.get('/targets', async (c) => {
+  const fy = await currentFy(c);
+  const [{ view, saved, latest }, fys, initiatives] = await Promise.all([targetView(c.env, fy), listFiscalYears(c.env), listInitiatives(c.env, fy)]);
+  return c.html(
+    <Layout title="今期の目標" active="/targets" actor={c.get('actor')} {...takeFlash(c)}>
+      <TargetsPage view={view} fys={fys} asOf={latest ? { fy: latest.fy, month: latest.month } : null} note={saved.note} updated={{ at: saved.updatedAt, by: saved.updatedBy }} initiatives={initiatives} />
+    </Layout>,
+  );
+});
+
+app.post('/targets', async (c) => {
+  const b = await c.req.parseBody();
+  const fy = int(b.fy);
+  if (!fy) return c.redirect('/targets');
+  const { view } = await targetView(c.env, fy);
+  const allowed = new Set(targetKeys(view));
+  const values: Record<string, number | null> = {};
+  for (const [k, v] of Object.entries(b)) {
+    if (!k.startsWith('t_')) continue;
+    const key = k.slice(2);
+    if (!allowed.has(key)) continue;
+    const n = int(v);
+    if (n !== null && (n < 0 || n > 1e12)) {
+      flash(c, `${view.rows.find((r) => r.key === key)?.name ?? key} の金額が正しくありません`, 'error');
+      return c.redirect(`/targets?fy=${fy}`);
+    }
+    values[key] = n;
+  }
+  await saveTargets(c.env, fy, values, str(b.note), c.get('actor'));
+  await audit(c.env, c.get('actor'), 'targets_save', { fy, count: Object.values(values).filter((v) => v !== null).length });
+  flash(c, `${fy}年度の目標を保存しました`);
+  return c.redirect(`/targets?fy=${fy}`);
 });
 
 // ---------- packages ----------

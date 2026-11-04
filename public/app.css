@@ -255,6 +255,21 @@ table.fin.inputs input { width: 100%; min-width: 84px; height: 34px; }
 .card > .scroll > table.fin, .card > table.fin { margin: 0; }
 .card:not(.flush) table.fin { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 
+/* ---------- targets ---------- */
+.target-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.inline-field input { width: 64px; height: 30px; text-align: right; }
+table.fin.targets td { padding-top: 6px; padding-bottom: 6px; }
+table.fin.targets input { width: 150px; height: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+table.fin.targets tr.total td [data-derived] { font-weight: 700; }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.foot-note { border-top: 1px solid var(--line); border-bottom: 0; }
+ul.init-list { list-style: none; padding: 0; margin: 0 0 6px; }
+ul.init-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.init-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.init-add { margin-top: 10px; padding-top: 4px; }
+.init-add h3 { margin: 6px 0 0; }
+
 /* ---------- tabs ---------- */
 .tabs { display: flex; flex-wrap: wrap; }
 .tab-input { position: absolute; opacity: 0; pointer-events: none; }
