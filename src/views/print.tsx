@@ -9,6 +9,7 @@ import { FiveYearCharts } from './closings';
 import { PRODUCT_NOTE, ProductTrendTable } from './products';
 import type { ProductTrend } from '../report/products';
 import { parseNote, type NoteBlock } from '../report/note';
+import { SummaryDoc } from './summary';
 import { fiveYearCompare } from '../report/closings';
 import { raw } from 'hono/html';
 import { groupedBars, waterfall } from './charts';
@@ -130,11 +131,32 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
   const olPrev = officer?.fyEnd?.[0] ?? null;
   const commonAtt = data.attachments.filter((a) => a.initiative_id === null);
   const dateStr = new Date(createdAt ?? r.meta.generatedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' });
-  let no = 0;
   const tg = data.targets ?? null;
   const five = fiveYearCompare(r.pastFy, data.compareYears ?? 5);
   const closingDocs = data.closingDocs ?? [];
-  const toc = ['損益計算書（累計・3期比較）', '製造原価報告書（累計・3期比較）', '貸借対照表', '月次推移', '月末棚卸の見積と補正', '借入金明細', ...(tg ? ['今期の目標'] : []), ...(tg?.note ? ['目標の考え方'] : []), '当期の施策と添付資料', '過去の決算', ...(data.products ? ['売れ筋商品の推移'] : [])];
+  // 節の並び。目標の考え方（事業の展望）とサマリーを先頭に置き、そのあと決算書類と資料を続ける
+  const sections: [string, string][] = (
+    [
+      tg?.note ? ['note', '目標の考え方'] : null,
+      ['summary', 'サマリー'],
+      ['pl', '損益計算書（累計・3期比較）'],
+      ['cr', '製造原価報告書（累計・3期比較）'],
+      ['bs', '貸借対照表'],
+      ['monthly', '月次推移'],
+      ['inventory', '月末棚卸の見積と補正'],
+      ['loans', '借入金明細'],
+      tg ? ['targets', '今期の目標'] : null,
+      ['initiatives', '当期の施策と添付資料'],
+      ['closings', '過去の決算'],
+      data.products ? ['products', '売れ筋商品の推移'] : null,
+    ] as ([string, string] | null)[]
+  ).filter((x): x is [string, string] => x !== null);
+  const toc = sections.map((x) => x[1]);
+  const ref = (key: string): [number, string] | null => {
+    const i = sections.findIndex((x) => x[0] === key);
+    return i < 0 ? null : [i + 1, sections[i][1]];
+  };
+  const no = (key: string) => ref(key)?.[0] ?? 0;
   const asOf = `〜${m.month}月`;
   const ser = (key: string) => r.monthly.series.find((x) => x.key === key);
   const col = (key: string, c: number) => (ser(key)?.values ?? []).map((v) => (v ? v[c] : null));
@@ -218,19 +240,29 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           </div>
         </section>
 
-        <Page title="損益計算書（累計・3期比較）" no={++no}>
+        {tg?.note && (
+          <Page title="目標の考え方" no={no('note')} cls="note-page">
+            <NoteDoc blocks={parseNote(tg.note)} />
+          </Page>
+        )}
+        <Page title="サマリー" no={no('summary')} cls="summary-page">
+          <p class="sub">この資料の要点です。数字は {monthLabel(m.fy, m.fyStartMonth, m.fyStartMonth)}〜{m.month}月累計（棚卸補正後）。各項目の詳細は右の番号のページにあります。</p>
+          <SummaryDoc r={r} targets={tg} initiatives={data.initiatives} products={data.products ?? null} compareYears={data.compareYears ?? 5} refOf={ref} />
+        </Page>
+
+        <Page title="損益計算書（累計・3期比較）" no={no('pl')}>
           <p class="sub">単位：円　棚卸補正後（作成基準 参照）</p>
           <FlowTable lines={r.pl} labels={r.labels} compact />
         </Page>
-        <Page title="製造原価報告書（累計・3期比較）" no={++no}>
+        <Page title="製造原価報告書（累計・3期比較）" no={no('cr')}>
           <p class="sub">単位：円　棚卸補正後</p>
           <FlowTable lines={r.cr} labels={r.labels} compact />
         </Page>
-        <Page title="貸借対照表" no={++no}>
+        <Page title="貸借対照表" no={no('bs')}>
           <p class="sub">単位：円　当月末は棚卸補正後、前期末・前々期末は決算確定値</p>
           <BsTable lines={r.bs} labels={r.labels} compact />
         </Page>
-        <Page title="月次推移" no={++no} cls="landscape">
+        <Page title="月次推移" no={no('monthly')} cls="landscape">
           <p class="sub">単位：円　棚卸補正は期首月の期首棚卸振替の戻しとして反映</p>
           <div class="chart-row">
             <figure>
@@ -248,7 +280,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           </div>
           <MonthlyTable r={r} />
         </Page>
-        <Page title="月末棚卸の見積と補正" no={++no}>
+        <Page title="月末棚卸の見積と補正" no={no('inventory')}>
           <h3>月末棚卸</h3>
           <InventoryTable r={r} />
           <h3>当期純損益への影響（freee 値からの増減）</h3>
@@ -261,7 +293,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           <h3>見積方法による違い（参考）</h3>
           <SensitivityTable r={r} />
         </Page>
-        <Page title="借入金明細" no={++no}>
+        <Page title="借入金明細" no={no('loans')}>
           <h3>勘定科目別残高</h3>
           <table class="fin">
             <thead>
@@ -351,7 +383,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           )}
         </Page>
         {tg && (
-          <Page title="今期の目標" no={++no}>
+          <Page title="今期の目標" no={no('targets')}>
             <p class="sub">
               単位：円　前期実績は決算確定値。{asOf}の実績・目安は棚卸補正後。目安＝今期目標 × 前期の同じ時期までに通期の何割だったか（季節の偏りを考慮）
             </p>
@@ -383,15 +415,11 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
                 ))}
               </tbody>
             </table>
-            {tg.note && <p class="sub">目標の考え方は次のページに載せています。</p>}
+            {tg.note && <p class="sub">目標の考え方は「{no('note')}. 目標の考え方」に載せています。</p>}
           </Page>
         )}
-        {tg?.note && (
-          <Page title="目標の考え方" no={++no} cls="note-page">
-            <NoteDoc blocks={parseNote(tg.note)} />
-          </Page>
-        )}
-        <Page title="当期の施策と添付資料" no={++no}>
+
+        <Page title="当期の施策と添付資料" no={no('initiatives')}>
           {data.initiatives.length === 0 && <p class="sub">登録なし</p>}
           {data.initiatives.map((i, idx) => (
             <div class="initiative">
@@ -460,7 +488,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           )}
           <p class="sub">添付資料は本資料とあわせて別ファイルでお渡しします。</p>
         </Page>
-        <Page title="過去の決算" no={++no}>
+        <Page title="過去の決算" no={no('closings')}>
           <p class="sub">単位：円　決算確定値（freee 会計の通期試算表）</p>
           {five.years.length >= 2 && (
             <>
@@ -489,7 +517,7 @@ export const PrintView: FC<{ data: PackageData; version: number | null; createdA
           )}
         </Page>
         {data.products && (
-          <Page title="売れ筋商品の推移" no={++no}>
+          <Page title="売れ筋商品の推移" no={no('products')}>
             <p class="sub">
               単位：円　Shopify の商品別売上（会計年度 3月〜2月）。順位は{data.products.basisFy}年度の売上の順、数字の下の小さな値は前年比
             </p>

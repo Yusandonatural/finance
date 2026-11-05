@@ -140,3 +140,20 @@ table.fin.products tr.sub-total td { color: var(--ink-2); }
 .note-doc .nd-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; }
 .note-doc .nd-table tr:last-child td { border-bottom: 0.8pt solid var(--ink); }
 .note-doc .nd-table th:nth-child(2) { text-align: right; }
+
+/* サマリー */
+.summary { font-size: 9.5pt; }
+.summary .sm-points { margin: 3mm 0 5mm; padding: 3.5mm 5mm 3.5mm 9mm; background: var(--band); border-left: 2pt solid var(--accent); font-size: 10.5pt; line-height: 1.75; }
+.summary .sm-points li { margin-bottom: 1.2mm; }
+.summary .sm-points li::marker { color: var(--accent); }
+.summary .sm-block { break-inside: avoid; margin-bottom: 4mm; }
+.summary h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 4mm; }
+.summary .sm-ref { font-size: 7.5pt; font-weight: 400; color: var(--ink-2); white-space: nowrap; }
+.summary table.sm-table { font-size: 9pt; }
+.summary table.sm-table td.neg { color: inherit; }
+.summary .sm-list { margin: 0; padding-left: 6mm; columns: 2; column-gap: 8mm; }
+.summary .sm-list li { margin-bottom: 1mm; break-inside: avoid; }
+.summary .sm-tag { display: inline-block; margin-left: 2mm; padding: 0 1.6mm; border: 0.5pt solid var(--line); border-radius: 1mm; font-size: 7.5pt; color: var(--ink-2); }
+.summary .sm-refs p { margin: 0 0 1.5mm; font-size: 8.5pt; color: var(--ink-2); line-height: 1.7; }
+.summary .sm-check { color: var(--accent); font-weight: 700; }
+.summary .sm-check.bad { color: #b3261e; }
