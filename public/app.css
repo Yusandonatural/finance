@@ -399,3 +399,13 @@ table.fin.products tr.sub-total + tr.sub-total td { border-top: 0; }
 table.fin.products td.spark-col { padding: 2px 16px 2px 8px; }
 table.fin.products th.spark-col { text-align: center; }
 p.note { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+/* freee と同期 */
+.side-sync { margin: 0; }
+.side-sync .sync-btn { width: 100%; justify-content: center; gap: 8px; }
+.side-sync .sync-btn .icon { width: 17px; height: 17px; }
+.inline-form { display: inline-flex; margin: 0; }
+@media (max-width: 820px) {
+  .side-sync .sync-btn span { display: none; }
+  .side-sync .sync-btn { width: auto; padding: 0 10px; }
+}

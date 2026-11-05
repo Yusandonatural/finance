@@ -392,7 +392,7 @@ function wireEvents() {
       return void go(`${action}?${q}`);
     }
     const label =
-      action === '/sync' ? 'freee から取り込んでいます。数十秒かかることがあります…' : action === '/closings/sync' ? 'freee から過去の決算を取り込んでいます。1〜2分かかることがあります…' : action === '/attachments' ? 'アップロードしています…' : undefined;
+      action === '/sync' || action === '/sync/now' ? 'freee と同期しています。数十秒かかることがあります…' : action === '/closings/sync' ? 'freee から過去の決算を取り込んでいます。1〜2分かかることがあります…' : action === '/attachments' ? 'アップロードしています…' : undefined;
     // 送信内容は空にしない（claude.ai の画面では、空のフォームを読み戻すと失敗することがある）
     data.append('_sent', '1');
     const hasFile = [...data.values()].some((v) => typeof v !== 'string');

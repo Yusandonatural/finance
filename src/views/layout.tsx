@@ -65,6 +65,12 @@ export const Layout: FC<{ title: string; active?: string; actor?: string; flash?
               </a>
             ))}
           </nav>
+          <form method="post" action="/sync/now" class="side-sync">
+            <button class="btn sync-btn" type="submit" title="締まった最新の月の試算表を freee から取り直します">
+              <Icon name="sync" />
+              <span>freee と同期</span>
+            </button>
+          </form>
           {actor && (
             <div class="actor" title={actor}>
               <span class="avatar">{actor.slice(0, 1).toUpperCase()}</span>

@@ -218,6 +218,32 @@ app.post('/sync', async (c) => {
   }
 });
 
+// 「freee と同期」：月の指定があればその月、なければ締まった最新の月を取り直す（今期の数字はいつも取り直す）
+app.post('/sync/now', async (c) => {
+  let b: Record<string, string | File> = {};
+  try {
+    b = await readBody(c);
+  } catch {
+    // 指定が読めなければ最新の月を同期する
+  }
+  let fy = int(b.fy);
+  let month = int(b.month);
+  if (!fy || !month) {
+    const fys = await listFiscalYears(c.env);
+    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const cur = fys.find((f) => f.start_date <= today && today <= f.end_date);
+    const startMonth = cur ? Number(cur.start_date.slice(5, 7)) : 3;
+    ({ fy, month } = previousClosedMonth(new Date(), startMonth));
+  }
+  try {
+    const r = await syncMonth(c.env, fy, month, { actor: c.get('actor') });
+    flash(c, `freee と同期しました（${month}月末まで・freee API ${r.calls} 回）${r.warnings.length ? '。注意：' + r.warnings.join('、') : ''}`);
+  } catch (e) {
+    flash(c, (e as Error).message, 'error');
+  }
+  return c.redirect(`/report?fy=${fy}&month=${month}`);
+});
+
 app.get('/auth/freee/start', async (c) => {
   if (!c.env.FREEE_CLIENT_ID) return c.text('FREEE_CLIENT_ID が未設定です', 500);
   const state = randomToken();

@@ -110,6 +110,13 @@ export const ReportPage: FC<{ r: Report; periods: Period[]; fys: FreeeFiscalYear
         </div>
         <div class="head-actions">
           <PeriodSelect periods={periods} fy={r.meta.fy} month={r.meta.month} action="/report" fys={fys} />
+          <form method="post" action="/sync/now" class="inline-form">
+            <input type="hidden" name="fy" value={String(r.meta.fy)} />
+            <input type="hidden" name="month" value={String(r.meta.month)} />
+            <button class="btn" type="submit" title="この月の試算表を freee から取り直し、最新の数字にします">
+              この月を freee と同期
+            </button>
+          </form>
           <a class="btn primary" href={`/print?${q}`} target="_blank">
             提出用ページを開く
           </a>
