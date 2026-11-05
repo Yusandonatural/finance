@@ -19,6 +19,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260927.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
+    "pagedjs": "^0.4.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2",
     "wrangler": "^4.141.0"

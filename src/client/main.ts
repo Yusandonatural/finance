@@ -7,6 +7,7 @@
  *   添付     → アーティファクトの assets
  *   提出用   → downloads で HTML ファイルとして保存（ブラウザで開いて PDF に印刷）
  */
+import { htmlToPdf } from './pdf';
 import { app } from '../index';
 import PRINT_CSS from '../../public/print.css';
 
@@ -274,9 +275,19 @@ async function render(url: string, init?: RequestInit, submitted?: HTMLFormEleme
 
 /** claude.ai 版に合わせて表示を少し変える */
 function decorate() {
-  root.querySelectorAll<HTMLAnchorElement>('a[href^="/print"]').forEach((a) => {
+  root.querySelectorAll<HTMLAnchorElement>('a[href^="/print"]:not([data-format])').forEach((a) => {
     a.removeAttribute('target');
-    a.textContent = a.closest('.history, section.card')?.querySelector('h2') ? '提出用ファイルを保存' : '提出用ファイルを保存（HTML）';
+    // PDF（印刷と同じレイアウト）を主に、HTML はその横に小さく置く
+    const small = a.classList.contains('small');
+    a.dataset.format = 'pdf';
+    a.textContent = small ? 'PDF で保存' : '提出用 PDF を保存';
+    const h = document.createElement('a');
+    h.href = a.getAttribute('href') ?? '';
+    h.dataset.format = 'html';
+    h.className = small ? 'btn small' : 'btn';
+    h.textContent = 'HTML で保存';
+    h.title = '印刷用の HTML。ブラウザで開いて印刷できます';
+    a.after(h);
   });
   root.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach((i) => (i.accept = '.pdf,.png,.jpg,.jpeg,.webp,.csv'));
   if (!downloads) root.querySelectorAll<HTMLAnchorElement>('a[href^="/print"]').forEach((a) => (a.hidden = true));
@@ -306,14 +317,29 @@ async function go(url: string, init?: RequestInit, label?: string, submitted?: H
 }
 
 /** 提出用ページを、ブラウザで開いて PDF に印刷できる HTML ファイルとして保存する */
-async function savePrint(href: string) {
+let pdfBusy = false;
+async function savePrint(href: string, asPdf = false) {
   if (!downloads) return toast('この表示ではファイルを保存できません', 'error', 6000);
+  if (asPdf && pdfBusy) return toast('PDF を作っています。終わるまでお待ちください', 'info', 4000);
   try {
     toast('提出用ファイルを作っています…');
     const { res } = await request(href);
     let html = await res.text();
     html = html.replace('<link rel="stylesheet" href="/print.css"/>', `<style>${PRINT_CSS}</style>`).replace('<link rel="stylesheet" href="/print.css">', `<style>${PRINT_CSS}</style>`);
     const title = (html.match(/<title>([^<]*)<\/title>/)?.[1] ?? '月次試算表').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
+    if (asPdf) {
+      pdfBusy = true;
+      let data: Uint8Array;
+      try {
+        data = await htmlToPdf(html, (msg) => toast(msg));
+      } finally {
+        pdfBusy = false;
+      }
+      toast('');
+      await downloads.save({ filename: `${title}.pdf`, data });
+      toast('PDF を保存しました', 'info', 6000);
+      return;
+    }
     toast('');
     await downloads.save({ filename: `${title}.html`, data: html });
     toast('保存しました。ブラウザで開き、印刷から「PDF に保存」を選んでください', 'info', 9000);
@@ -374,7 +400,7 @@ function wireEvents() {
     if (href.startsWith('#')) return; // ページ内リンク
     if (!href.startsWith('/') || href.startsWith('/_blob/')) return; // 添付ファイルや外部リンクはそのまま
     e.preventDefault();
-    if (href.startsWith('/print')) return void savePrint(href);
+    if (href.startsWith('/print')) return void savePrint(href, a.dataset.format !== 'html');
     void go(href);
   });
 
